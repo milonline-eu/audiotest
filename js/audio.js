@@ -62,9 +62,10 @@ function startTone(ch, col, btn, volPct, rowVolLabel, rowDbStr) {
   if (state.playing) stopCurrent();
 
   var freq = state.freqs[col];
-  // Gain from the dB ladder: row r (0 = top) plays at -r dB, gain 10^(-r/20).
+  // Gain from the configurable dB ladder: the row plays at rowDbValue(row) dB
+  // (range state.dbMax top ... state.dbMin bottom), gain 10^(db/20).
   var row = Number(btn.dataset.row);
-  var vol = Math.pow(10, (-row) / 20);
+  var vol = Math.pow(10, rowDbValue(row) / 20);
   var L = Math.max(0, state.seqLen);
   var D = Math.max(0, state.delay);
   if (L <= 0 || !freq) { return; }

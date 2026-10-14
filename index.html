@@ -18,6 +18,18 @@
       <input type="number" id="stepsIn" min="1" max="50" value="20">
       <button type="button" class="stepper" id="stepsInPlus" aria-label="increase steps">+</button>
     </label>
+    <label>
+      Min dB
+      <button type="button" class="stepper" id="dbMinMinus" aria-label="decrease min dB">&minus;</button>
+      <input type="number" id="dbMinIn" min="-1000" max="0" step="1" value="-80">
+      <button type="button" class="stepper" id="dbMinPlus" aria-label="increase min dB">+</button>
+    </label>
+    <label>
+      Max dB
+      <button type="button" class="stepper" id="dbMaxMinus" aria-label="decrease max dB">&minus;</button>
+      <input type="number" id="dbMaxIn" min="-1000" max="0" step="1" value="-20">
+      <button type="button" class="stepper" id="dbMaxPlus" aria-label="increase max dB">+</button>
+    </label>
     <label class="freq-mode">
       Frequency mode
       <span>

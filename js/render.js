@@ -10,16 +10,19 @@ function rowVolLabelFromPct(S, row) {
   return pct.toFixed(1).replace(/\.0$/, '');
 }
 
-// Playback ladder in dB: row r (0 = top) plays at −r dB relative to the top
-// row (0 dB), i.e. every row is exactly 1 dB quieter than the row above it.
-// Display-only % labels (rowVolLabelFromPct) keep the legacy linear values.
+// Playback ladder in dB: top row (0) = state.dbMax, bottom row (S-1) =
+// state.dbMin, linear in dB across state.steps rows. The display-only %
+// labels (rowVolLabelFromPct) keep the legacy linear values.
 function rowDbLabel(row) {
-  return (-row).toFixed(1);
+  return rowDbValue(row).toFixed(1);
 }
 
-// dB value for a row as a number (0 for the top row, negative below).
+// dB value for a row as a number (state.dbMax for the top row,
+// state.dbMin for the bottom row, linear in dB between them).
 function rowDbValue(row) {
-  return -row;
+  var S = state.steps;
+  if (S <= 1) return state.dbMax;                 // one row = top = max
+  return state.dbMax + row * ((state.dbMin - state.dbMax) / (S - 1));
 }
 
 // dB value for a stored percentage: invert pct -> row, then row -> dB.
@@ -63,7 +66,7 @@ function renderChannel(ch) {
   for (var r = 0; r < S; r++) {
     var tr = tbody.appendChild(document.createElement('tr'));
     // Row label (left side) — the single place the volume is shown: legacy
-    // linear % plus the playback ladder in dB (equal -1 dB per row).
+    // linear % plus the playback ladder in dB (state.dbMax top ... state.dbMin bottom).
     var labelCell = document.createElement('td');
     labelCell.className = 'rowlabel';
     var lbl = rowVolLabelFromPct(S, r);

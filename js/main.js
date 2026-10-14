@@ -11,6 +11,11 @@ function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
 }
 
+// "Library allows" bounds for the dB ladder inputs (Tone.js dbToGain has no
+// built-in clamp): quietest meaningful floor and unity-gain ceiling.
+var DB_LIB_MIN = -1000;
+var DB_LIB_MAX = 0;
+
 // Apply dir*delta to a numeric input, snap to its step, clamp to min/max.
 // Returns the new value.
 function clampWrite(input, delta) {
@@ -115,6 +120,40 @@ function onDelayStepper(dir) {
   clampWrite(delayIn, dir * 0.1);
   onDelayChange();
 }
+// dbMinIn / dbMaxIn: re-render + stopCurrent (a playing tone's row dB changes
+// when the range changes). Cross-clamp keeps dbMin <= dbMax.
+function onDbMinChange() {
+  var dbMinIn = document.getElementById('dbMinIn');
+  var dbMaxIn = document.getElementById('dbMaxIn');
+  var hi = Number(dbMaxIn.value); if (!isFinite(hi)) hi = state.dbMax;
+  var v = syncFromInput(dbMinIn, DB_LIB_MIN, hi);   // cross-clamp so dbMin <= dbMax
+  state.dbMin = v;
+  stopCurrent();
+  renderChannel('left');
+  renderChannel('right');
+  renderCharts();
+  updateClipDump();
+}
+function onDbMaxChange() {
+  var dbMaxIn = document.getElementById('dbMaxIn');
+  var dbMinIn = document.getElementById('dbMinIn');
+  var lo = Number(dbMinIn.value); if (!isFinite(lo)) lo = state.dbMin;
+  var v = syncFromInput(dbMaxIn, lo, DB_LIB_MAX);   // cross-clamp so dbMax >= dbMin
+  state.dbMax = v;
+  stopCurrent();
+  renderChannel('left');
+  renderChannel('right');
+  renderCharts();
+  updateClipDump();
+}
+function onDbMinStepper(dir) {
+  clampWrite(document.getElementById('dbMinIn'), dir * 1);
+  onDbMinChange();
+}
+function onDbMaxStepper(dir) {
+  clampWrite(document.getElementById('dbMaxIn'), dir * 1);
+  onDbMaxChange();
+}
 
 // ----- wiring -----
 
@@ -133,6 +172,10 @@ function wire() {
   document.getElementById('lenInPlus').addEventListener('click', function () { onLenStepper(1); });
   document.getElementById('delayInMinus').addEventListener('click', function () { onDelayStepper(-1); });
   document.getElementById('delayInPlus').addEventListener('click', function () { onDelayStepper(1); });
+  document.getElementById('dbMinMinus').addEventListener('click', function () { onDbMinStepper(-1); });
+  document.getElementById('dbMinPlus').addEventListener('click', function () { onDbMinStepper(1); });
+  document.getElementById('dbMaxMinus').addEventListener('click', function () { onDbMaxStepper(-1); });
+  document.getElementById('dbMaxPlus').addEventListener('click', function () { onDbMaxStepper(1); });
 
   // stepsIn
   stepsIn.addEventListener('change', onStepsChange);
@@ -156,6 +199,25 @@ function wire() {
   delayIn.addEventListener('input', function () {
     var raw = Number(delayIn.value);
     if (isFinite(raw)) state.delay = clamp(raw, 0, 30);
+  });
+
+  var dbMinIn = document.getElementById('dbMinIn');
+  var dbMaxIn = document.getElementById('dbMaxIn');
+
+  // dbMinIn
+  dbMinIn.addEventListener('change', onDbMinChange);
+  dbMinIn.addEventListener('keyup', function (e) { if (e.key === 'Enter') onDbMinChange(); });
+  dbMinIn.addEventListener('input', function () {
+    var raw = Number(dbMinIn.value);
+    if (isFinite(raw)) state.dbMin = clamp(raw, DB_LIB_MIN, 0);
+  });
+
+  // dbMaxIn
+  dbMaxIn.addEventListener('change', onDbMaxChange);
+  dbMaxIn.addEventListener('keyup', function (e) { if (e.key === 'Enter') onDbMaxChange(); });
+  dbMaxIn.addEventListener('input', function () {
+    var raw = Number(dbMaxIn.value);
+    if (isFinite(raw)) state.dbMax = clamp(raw, -1000, 0);
   });
 
   // freq mode radios
@@ -193,6 +255,8 @@ function startup() {
   state.steps = 20;
   state.seqLen = 5;
   state.delay = 0.2;
+  state.dbMin = -80;
+  state.dbMax = -20;
   state.freqs = presetFor('A');
   renderChannel('left');
   renderChannel('right');

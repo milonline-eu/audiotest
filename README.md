@@ -22,8 +22,8 @@ No server is required.
 | **Frequency mode** (Preset A / Preset B / Custom radio buttons) | Preset A = 15-tone IEC set, Preset B = 19-tone IEC set (the default). Custom enables the text field below. |
 | **Custom** text field | Comma- or space-separated list of frequencies in Hz. Click **Apply frequencies** (or press Enter) to use them. |
 | **Reset** button | Re-enables the dB step / Min dB / Max dB inputs and the frequency controls once they have locked. Locking happens automatically the first time a value is set in the **matrix selectors** — a matrix radio change or a cell click. Changing the settings inputs or frequency mode does not lock. |
-| **Copy values** button | Copies all current channel/frequency/volume settings (with a capture timestamp) to the clipboard. |
-| **Save JSON** button | Downloads the same JSON as a `zero-db-hero-<timestamp>.json` file. |
+| **Copy to clipboard** button | Copies all current channel/frequency/volume settings (with a capture timestamp) to the clipboard. |
+| **Save** button | Downloads the same JSON as a `zero-db-hero-<localTimestamp>.json` file. |
 
 ## Layout
 
@@ -55,6 +55,8 @@ Clicking **Copy values** writes the current settings to the clipboard as pretty-
 ```json
 {
   "timestamp": "2026-10-14T12:34:56.789Z",
+  "timestamp": "2026-10-14T12:34:56.789Z",
+  "localTimestamp": "2026-10-14T14:34:56.789",
   "dbStep": 2,
   "dbMin": -80,
   "dbMax": -20,

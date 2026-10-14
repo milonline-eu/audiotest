@@ -54,7 +54,7 @@ Zero dB Hero is a single-page web app that plays left/right sine tones from a fr
   - `setStatus(t)` — sets the status line text.
   - `copyValues()` — copies the current settings as pretty-printed **JSON** to the clipboard, then updates `#clipDump`.
   - `updateClipDump()` — populates the `#clipDump` textarea with the full pretty-printed JSON (the textarea is scrollable and shows everything).
-  - `saveClipJSON()` — saves the current JSON settings as a `application/json` file download (blob + `a[download]`), named `zero-db-hero-<timestamp>.json` (ISO timestamp, colons → dashes). Also refreshes `#clipDump`.
+  - `saveClipJSON()` — saves the current JSON settings as an `application/json` file download (blob + `a[download]`), named `zero-db-hero-<localTimestamp>.json` (local-time timestamp, colons → dashes). Also refreshes `#clipDump`.
   - `rowDbLabel(row)` — returns the dB-ladder label string for a row (e.g. `-20.0`).
   - `rowDbValue(row)` — returns the dB-ladder value as a number for a row: `state.dbMax − row * state.dbStep` (`state.dbMax` when `S ≤ 1`).
   - `defaultMidRow()` — returns the row index nearest the ladder midpoint `(dbMax+dbMin)/2` (−50.0 dB at row 10 of 31 with the defaults), clamped into `[0, S−1]`.
@@ -82,8 +82,8 @@ No automated test suite exists. Verification is manual:
 5. Click the active (highlighted) cell again — verify it stops immediately and the highlight is removed.
 6. Press Escape — verify the current tone stops.
 7. Change a matrix radio — verify the chart updates and the settings controls lock.
-8. Click "Copy values" — verify the clipboard contains pretty-printed JSON with a `timestamp` (ISO 8601 UTC, e.g. `2026-10-14T12:34:56.789Z`) followed by the keys `dbStep`, `dbMin`, `dbMax`, `sequenceLengthSec`, `delayBetweenBeepsSec`, and a `channels.left`/`channels.right` array of `{"freqHz":N,"volumeDb":D}` objects (no `volumePct`).
-9. Click "Save JSON" — verify a `zero-db-hero-<timestamp>.json` file downloads (ISO timestamp with colons replaced by dashes) and the text area updates.
+8. Click "Copy to clipboard" — verify the clipboard contains pretty-printed JSON with a `timestamp` (ISO 8601 UTC, e.g. `2026-10-14T12:34:56.789Z`) and a `localTimestamp` (same moment, local time) followed by the keys `dbStep`, `dbMin`, `dbMax`, `sequenceLengthSec`, `delayBetweenBeepsSec`, and a `channels.left`/`channels.right` array of `{"freqHz":N,"volumeDb":D}` objects (no `volumePct`).
+9. Click "Save" — verify a `zero-db-hero-<localTimestamp>.json` file downloads (local timestamp with colons replaced by dashes) and the text area updates.
 10. Select a matrix value (click a cell or a matrix radio — but not a settings input or frequency-mode change) — verify the dB step / Min dB / Max dB inputs (incl. steppers) and the frequency controls become disabled; click **Reset** → they re-enable (Apply frequencies stays disabled unless the mode is Custom).
 11. Toggle between Preset A (15 tones), Preset B (19 tones, the default), and Custom frequencies — verify the matrices and charts update.
 12. Use the steppers to change dB step, Min/Max dB, sequence length, and delay — verify the input values and behavior update correctly (ladder changes re-render the matrices with the derived row count and stop any playing tone).
@@ -97,10 +97,9 @@ No automated test suite exists. Verification is manual:
   - Frequency mode: `fm` radio group, `customFreq`, `applyFreq`
   - Matrices: `matrix-L`, `matrix-R`
   - Charts: `chartL`, `chartR`
-  - Status: `status`
-  - Footer: `resetBtn`, `copyBtn`, `saveBtn`, `clipDump`
+  - Footer: `resetBtn`, `copyBtn`, `saveBtn`, `clipDump` — the three buttons are stacked **vertically** in a `footer .footer-actions` column (Reset on top, then Copy to clipboard, then Save) beside the `clipDump` textarea.
 - Radio `name` format: `vol-{ch}-{col}` where `ch` is `left` or `right` and `col` is the frequency index.
 - Radio `id` format: `rad-{ch}-{col}-{row}`.
 - Matrix cells contain a radio only — **no tone buttons**; the row/column/channel of a clicked cell come from the radio `id` inside the cell. The playing cell gets the `active` class (`td.cell.active`, background `#f7b7b7`).
-- Clipboard/`#clipDump` format: pretty-printed JSON (2-space indent) with keys `timestamp` (ISO 8601 UTC capture time, e.g. `2026-10-14T12:34:56.789Z`), `dbStep`, `dbMin`, `dbMax`, `sequenceLengthSec`, `delayBetweenBeepsSec`, and `channels` = `{left:[{freqHz,volumeDb}...], right:[...]}` (freqs low→high, built from `state.freqs`/`state.vols`; `volumeDb` is the dB value the row plays at). The row count is intentionally omitted — it is derivable from `dbStep`/`dbMin`/`dbMax`.
+- Clipboard/`#clipDump` format: pretty-printed JSON (2-space indent) with keys `timestamp` (ISO 8601 UTC capture time, e.g. `2026-10-14T12:34:56.789Z`), `localTimestamp` (same moment in local time, e.g. `2026-10-14T14:34:56.789`), `dbStep`, `dbMin`, `dbMax`, `sequenceLengthSec`, `delayBetweenBeepsSec`, and `channels` = `{left:[{freqHz,volumeDb}...], right:[...]}` (freqs low→high, built from `state.freqs`/`state.vols`; `volumeDb` is the dB value the row plays at). The row count is intentionally omitted — it is derivable from `dbStep`/`dbMin`/`dbMax`. The **Save** button downloads this JSON as `zero-db-hero-<localTimestamp>.json` (local timestamp, colons → dashes).
 - Volume row r (0 = top): `rowDbValue(r) = dbMax − r·dbStep` dB, gain `10^(db/20)` → `state.dbMax` top, each row `dbStep` dB quieter, bottom row (S−1) = `dbMax − (S−1)·dbStep` (defaults: −20.0 dB top … −80.0 dB bottom, 31 rows, 2 dB per row). `dbStep`/`dbMin`/`dbMax` are the user-set dB step / Min dB / Max dB inputs (ladder bounds −1000…0 dB for Min/Max, 0.1–10 for the step, cross-clamped so `dbMin ≤ dbMax`). The default checked row is the nearest ladder midpoint (−50.0 dB at row 10 of 31 with the defaults).

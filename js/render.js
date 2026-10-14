@@ -2,8 +2,8 @@
 // status line (setStatus), and the clipboard copy (copyValues).
 // All element ids are pinned in index.html and may not change.
 // Exposed as globals: renderChannel, attachListeners, renderCharts,
-// setStatus, copyValues, updateClipDump, saveClipJSON, rowDbLabel, rowDbValue,
-// defaultMidRow.
+// setStatus, copyValues, updateClipDump, saveClipJSON, localTimestamp,
+// rowDbLabel, rowDbValue, defaultMidRow.
 
 // Playback ladder in dB: top row (0) = state.dbMax, each row dbStep dB
 // quieter (state.dbStep); bottom row (S-1) = dbMax - (S-1)*dbStep.
@@ -242,9 +242,10 @@ function renderCharts() {
 // ---------- clipboard (JSON) ----------
 
 // Builds a JSON document of all (channel, frequency, volume) settings, plus
-// the global ladder and sequence parameters and a capture timestamp. Shape:
+// the global ladder and sequence parameters and capture timestamps. Shape:
 //   {
-//     "timestamp": "YYYY-MM-DDTHH:MM:SS.sssZ",
+//     "timestamp": "YYYY-MM-DDTHH:MM:SS.sssZ",       (ISO 8601, UTC)
+//     "localTimestamp": "YYYY-MM-DDTHH:MM:SS.sss",   (same moment, local time)
 //     "dbStep": N,
 //     "dbMin": N,
 //     "dbMax": N,
@@ -256,6 +257,17 @@ function renderCharts() {
 //     }
 //   }
 // The row count is not included: it is derivable from dbStep/dbMin/dbMax.
+//
+// ISO-like local-time string (YYYY-MM-DDTHH:MM:SS.sss, no zone suffix).
+function localTimestamp(d) {
+  d = d || new Date();
+  function p2(n) { return (n < 10 ? '0' : '') + n; }
+  var ms = '' + d.getMilliseconds();
+  while (ms.length < 3) ms = '0' + ms;
+  return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) +
+    'T' + p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds()) +
+    '.' + ms;
+}
 function buildClipJSON() {
   var freqs = state.freqs.slice();
   function block(ch) {
@@ -268,8 +280,10 @@ function buildClipJSON() {
     }
     return rows;
   }
+  var now = new Date();
   return {
-    timestamp: new Date().toISOString(),
+    timestamp: now.toISOString(),
+    localTimestamp: localTimestamp(now),
     dbStep: Number(state.dbStep),
     dbMin: Number(state.dbMin),
     dbMax: Number(state.dbMax),
@@ -317,9 +331,8 @@ function updateClipDump() {
   catch (e) { text = JSON.stringify(data); }
   document.getElementById('clipDump').value = text;
 }
-
 // Save the current JSON settings as a file download, named with the capture
-// time, e.g. zero-db-hero-2026-10-14T12-34-56-789Z.json.
+// time in LOCAL time, e.g. zero-db-hero-2026-10-14T14-47-22-022.json.
 function saveClipJSON() {
   var data = buildClipJSON();
   var text;
@@ -328,8 +341,7 @@ function saveClipJSON() {
   var blob = new Blob([text], { type: 'application/json' });
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
-  a.href = url;
-  a.download = 'zero-db-hero-' + data.timestamp.replace(/:/g, '-') + '.json';
+  a.download = 'zero-db-hero-' + data.localTimestamp.replace(/:/g, '-') + '.json';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -346,5 +358,4 @@ window.copyValues = copyValues;
 window.updateClipDump = updateClipDump;
 window.saveClipJSON = saveClipJSON;
 window.rowDbLabel = rowDbLabel;
-window.rowDbValue = rowDbValue;
-window.defaultMidRow = defaultMidRow;
+window.localTimestamp = localTimestamp;

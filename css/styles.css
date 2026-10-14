@@ -111,6 +111,9 @@ footer {
   background: #fff; border: 1px solid #ddd; border-radius: 6px;
   padding: 8px 10px;
 }
+footer .footer-actions {
+  display: flex; flex-direction: column; gap: 4px;
+}
 footer textarea {
   font: 11px/1.35 monospace;
   width: 100%; max-width: 100%;

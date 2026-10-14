@@ -87,8 +87,12 @@ button:disabled { opacity: .5; cursor: default; }
   font-size: 11px;
 }
 .matrix-scroll td.rowlabel {
-  min-width: 50px; text-align: center;
+  min-width: 56px; text-align: center;
   font-family: monospace; font-size: 11px;
+}
+/* dB sub-line under the % in each row label (equal -1 dB per row). */
+.matrix-scroll td.rowlabel .rowlabel-db {
+  font-size: 9px; color: #666; margin-top: 1px;
 }
 /* Each cell: radio on the left, tone button filling the rest. */
 .matrix-scroll input[type=radio] {

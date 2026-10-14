@@ -4,6 +4,10 @@
 
 The Audio Tone Matrix is a single-page web app that plays left/right sine tones from a frequency×volume-step button matrix. Each channel has a matrix where columns are frequencies and rows are volume steps (100% at top, 5% at bottom). Each cell contains a radio button (sets that frequency's volume for that channel) and a tone button (plays that frequency at that volume for the configured sequence length with inter-beep delay). Two canvas charts show the volume per frequency for each channel. A status line shows `idle` or `playing freq=XHz vol=Y% ch=left|right`. A clipboard copy button writes all current (channel, frequency, volume) values.
 
+**Volume model** — two units are shown side by side:
+- **Percent (legacy, display-only)**: row r (0 = top) label `(S - r) * 100 / S` → 100% top … 5% bottom (S=20). Shown in the row label (main line), the chart y-axis (0–100), and `volumePct` in the clipboard JSON.
+- **dB (playback ladder)**: row r plays at **−r dB** (top row 0 dB; exactly 1 dB per row). Gain = `10^(-r/20)`. This is what the audio engine uses. Shown in the row label (sub-line, `.rowlabel-db`), the status line `vol=Y% (Z dB)`, and `volumeDb` in the clipboard JSON.
+
 ## Files
 
 | File | Description |
@@ -12,8 +16,8 @@ The Audio Tone Matrix is a single-page web app that plays left/right sine tones 
 | `css/styles.css` | All styles. |
 | `js/state.js` | Declares the global `state` object (`freqs`, `steps`, `seqLen`, `delay`, `vols`, `playing`). |
 | `js/presets.js` | Frequency preset arrays (`PRESET_A`, `PRESET_B`) and the `parseCustomFrequencies(text)` helper. |
-| `js/audio.js` | Playback engine: `startTone()`, `stopCurrent()`, `toggleBtn()`, `rowVolLabelFromPct()`. |
-| `js/render.js` | Rendering: `renderChannel(ch)`, `renderCharts()`, `setStatus()`, `copyValues()`, `updateClipDump()`, `defaultRowFor50()`, `rowVolLabelFromPct()`. |
+| `js/audio.js` | Playback engine: `startTone()`, `stopCurrent()`, `toggleBtn()`, `rowVolLabelFromPct()`. Gain comes from the dB ladder (`10^(-row/20)`). |
+| `js/render.js` | Rendering: `renderChannel(ch)`, `renderCharts()`, `setStatus()`, `copyValues()`, `updateClipDump()`, `defaultRowFor50()`, `rowVolLabelFromPct()`, `rowDbLabel()`, `rowDbValue()`, `rowDbFromPct()`. |
 | `js/main.js` | Event wiring and initialization. |
 | `README.md` | User-facing quick-start. |
 | `AGENTS.md` | This file — agent-facing project guide. |
@@ -29,7 +33,7 @@ The Audio Tone Matrix is a single-page web app that plays left/right sine tones 
   - `vols: { left: number[], right: number[] }` — current volume percentage per frequency per channel.
   - `playing: {ch, col, btnEl, src, timerId, endTimer} | null` — current playing tone; `src` is the Tone.js chain `{osc, gain, pan, stop()}` (or null).
 - **Tone.js (external, `lib/Tone.js` v15.1.22)**: playback uses Tone.js instead of raw Web Audio.
-  - Tones are built as `Tone.Oscillator(freq, 'sine') → Tone.Gain(vol) → Tone.Panner(pan) → Tone.getDestination()`.
+  - Tones are built as `Tone.Oscillator(freq, 'sine') → Tone.Gain(vol) → Tone.Panner(pan) → Tone.getDestination()`. `vol` is the dB-ladder gain `10^(-row/20)` (row 0 = 0 dB), not a percentage.
   - `Tone.Panner` value `−1` = fully left, `+1` = fully right; set per `ch` in `makeSource(freq, vol, ch, dur)`.
   - `startTone` awaits `Tone.start()` (the context-running promise) before building the chain so `Tone.context.currentTime` is accurate when scheduling `osc.stop(t + dur)`.
   - `stopCurrent()` calls `stop()` on the stored chain and `dispose()`s the nodes.
@@ -37,18 +41,21 @@ The Audio Tone Matrix is a single-page web app that plays left/right sine tones 
   - `#channels` is a CSS grid of two columns; each `.channel` has its chart (`#chartL`/`#chartR`) above its matrix (`#matrix-L`/`#matrix-R`).
   - `#status` is a `<div>` with `position: fixed; bottom: 0` so it is always visible while scrolling.
 - **Rendering functions** (in `js/render.js`):
-  - `renderChannel(ch)` — builds the HTML table for the left or right matrix. Each cell (`.cell`) holds a visible radio + a `.tone` button; the cell shows **no** volume text — the percentage is shown only by the row label in the leftmost column. Called on frequency/steps change. Resets all radios to unselected, then checks the 50% radio per frequency column.
-  - `renderCharts()` — draws both canvas charts: a `#555` line + red × markers, `#999` axes/gridlines, and x-axis frequency labels rotated 45° so long lists never overlap. Called on radio change, on re-render, and on debounced window resize.
+  - `renderChannel(ch)` — builds the HTML table for the left or right matrix. Each cell (`.cell`) holds a visible radio + a `.tone` button; the cell shows **no** volume text — the volume is shown only by the row label in the leftmost column: the legacy percent on the main line and the dB ladder value (`.rowlabel-db` sub-line) below it. Called on frequency/steps change. Resets all radios to unselected, then checks the 50% radio per frequency column.
+  - `renderCharts()` — draws both canvas charts: a `#555` line + red × markers, `#999` axes/gridlines, and x-axis frequency labels rotated 45° so long lists never overlap. Y-axis is the legacy percent (0–100). Called on radio change, on re-render, and on debounced window resize.
   - `setStatus(t)` — sets the status line text.
   - `copyValues()` — copies the current settings as pretty-printed **JSON** to the clipboard, then updates `#clipDump`.
   - `updateClipDump()` — populates `#clipDump` with the first 15 lines (truncated with `…`).
-  - `rowVolLabelFromPct(S, row)` — returns the volume label string for a given step count and row.
+  - `rowVolLabelFromPct(S, row)` — returns the legacy percent label string for a given step count and row.
+  - `rowDbLabel(row)` — returns the dB-ladder label string for a row (e.g. `-10.0`).
+  - `rowDbValue(row)` — returns the dB-ladder value as a number for a row (0 for the top row).
+  - `rowDbFromPct(pct, S)` — inverts a stored percent to its row, then to the dB-ladder value.
   - `defaultRowFor50(S)` — returns the row index that represents 50% volume.
 - **Playback functions** (in `js/audio.js`):
-  - `startTone(ch, col, btn, volPct, rowVolLabel)` — starts playing a tone. If a tone is already playing, `stopCurrent()` is called first.
+  - `startTone(ch, col, btn, volPct, rowVolLabel, rowDbStr)` — starts playing a tone. If a tone is already playing, `stopCurrent()` is called first. The status line shows `vol=Y% (Z dB)`.
   - `stopCurrent()` — stops the current tone, clears timers, removes the active class, resets `state.playing` to null, sets status to `idle`.
   - `toggleBtn(btn)` — if `btn === state.playing.btnEl`, calls `stopCurrent()`; otherwise calls `startTone()`.
-  - `rowVolLabelFromPct(S, row)` — returns the volume label string for a given step count and row.
+  - `rowVolLabelFromPct(S, row)` — returns the legacy percent label string for a given step count and row.
 
 ## How to extend
 
@@ -61,13 +68,13 @@ The Audio Tone Matrix is a single-page web app that plays left/right sine tones 
 No automated test suite exists. Verification is manual:
 
 1. Open `index.html` in a modern browser.
-2. Verify: two matrices (15 columns × 20 rows), two charts, status line shows `idle`, `#clipDump` is empty.
-3. Click a tone button — verify status changes to `playing freq=XHz vol=Y% ch=Z`, button turns active (red), then returns to idle after `seqLen` seconds.
+2. Verify: two matrices (15 columns × 20 rows), two charts, status line shows `idle`, `#clipDump` is empty. Row labels show the legacy % on the top line and the dB ladder value (e.g. `0.0 dB`, `-10.0 dB`) on the sub-line below it.
+3. Click a tone button — verify status changes to `playing freq=XHz vol=Y% (Z dB) ch=Z`, button turns active (red), then returns to idle after `seqLen` seconds.
 4. Click a second tone button while the first is playing — verify the first stops (exclusive) and the second starts.
 5. Click the active button again — verify it stops immediately.
 6. Press Escape — verify the current tone stops.
 7. Change a radio button — verify the chart updates.
-8. Click "Copy values" — verify the clipboard contains pretty-printed JSON with keys `steps`, `sequenceLengthSec`, `delayBetweenBeepsSec`, and a `channels.left`/`channels.right` array of `{"freqHz":N,"volumePct":V}` objects.
+8. Click "Copy values" — verify the clipboard contains pretty-printed JSON with keys `steps`, `sequenceLengthSec`, `delayBetweenBeepsSec`, and a `channels.left`/`channels.right` array of `{"freqHz":N,"volumePct":V,"volumeDb":D}` objects.
 9. Toggle between Preset A (15 tones), Preset B (19 tones), and Custom frequencies — verify the matrices and charts update.
 10. Use the steppers to change steps, sequence length, and delay — verify the input values and behavior update correctly.
 
@@ -85,5 +92,7 @@ No automated test suite exists. Verification is manual:
 - Radio `name` format: `vol-{ch}-{col}` where `ch` is `left` or `right` and `col` is the frequency index.
 - Radio `id` format: `rad-{ch}-{col}-{row}`.
 - Tone button `data-*` attributes: `data-ch`, `data-col`, `data-row`.
-- Clipboard/`#clipDump` format: pretty-printed JSON (2-space indent) with keys `steps`, `sequenceLengthSec`, `delayBetweenBeepsSec`, and `channels` = `{left:[{freqHz,volumePct}...], right:[...]}` (freqs low→high, built from `state.freqs`/`state.vols`).
-- Volume row r (0 = top) value: `(S - r) * 100 / S` → 100% top … 5% bottom (S=20).
+- Clipboard/`#clipDump` format: pretty-printed JSON (2-space indent) with keys `steps`, `sequenceLengthSec`, `delayBetweenBeepsSec`, and `channels` = `{left:[{freqHz,volumePct,volumeDb}...], right:[...]}` (freqs low→high, built from `state.freqs`/`state.vols`; `volumeDb` is the dB-ladder value for that row).
+- Volume row r (0 = top):
+  - **Percent (display-only)**: `(S - r) * 100 / S` → 100% top … 5% bottom (S=20).
+  - **dB (playback ladder)**: `−r dB`, gain `10^(-r/20)` → 0.0 dB top … −19.0 dB bottom (S=20). This is the actual gain the audio engine applies; each row is exactly 1 dB quieter than the row above it.

@@ -14,7 +14,7 @@ No server is required.
 
 | Control | What it does |
 |---------|-------------|
-| **Volume steps** (numeric input with −/+ steppers) | Sets how many volume rows to show (1–50). Changing this re-renders both matrices and stops any playing tone. |
+| **Volume steps** (numeric input with −/+ steppers) | Sets how many volume rows to show (1–50). Rows form a dB ladder: the top row plays at 0 dB and each row below is exactly 1 dB quieter (e.g. row 10 = −10.0 dB). Changing this re-renders both matrices and stops any playing tone. |
 | **Sequence length (s)** (numeric input with −/+ steppers) | Total duration of each tone burst (0.5–60 s). Applied immediately; no re-render needed. |
 | **Delay between beeps (s)** (numeric input with −/+ steppers) | When > 0, the tone plays in on/off blips of this duration (0% duty = 50% on, 50% off). Applied immediately. |
 | **Frequency mode** (Preset A / Preset B / Custom radio buttons) | Preset A = 15-tone IEC set, Preset B = 19-tone IEC set. Custom enables the text field below. |
@@ -27,9 +27,9 @@ The page is split into two side-by-side columns, one per channel. In each column
 
 ## Matrix
 
-Each matrix has frequencies as columns (low → high, left to right) and volume steps as rows (100% at the top, 5% at the bottom).
-- The percentage value is shown only by the row label in the left column of each matrix — the individual cells show no volume text.
-- Each cell holds a **radio button** (on the left) and a **tone button** (filling the rest). Clicking the radio sets that frequency's volume for that channel (clicking a radio does not play any sound); clicking the tone button plays that frequency at that row's volume for the configured sequence length, with the chosen inter-beep delay.
+Each matrix has frequencies as columns (low → high, left to right) and volume steps as rows. Volume is shown in two units: a **dB ladder** (the top row plays at 0 dB and each row below is exactly 1 dB quieter — the actual gain the tone button plays) and a **legacy linear percent** (100% at the top, 5% at the bottom with 20 steps — display-only).
+- The row label in the left column of each matrix shows both: the percent on the top line and the dB value on the sub-line below it (e.g. `50` / `−10.0 dB`). Individual cells show no volume text.
+- Each cell holds a **radio button** (on the left) and a **tone button** (filling the rest). Clicking the radio sets that frequency's volume for that channel (clicking a radio does not play any sound); clicking the tone button plays that frequency at that row's dB gain for the configured sequence length, with the chosen inter-beep delay.
 - Only **one tone plays at a time** (exclusive). Clicking a new tone button stops the previous one.
 - Clicking the **active** (highlighted red) button again stops the tone immediately.
 - Pressing **Escape** also stops the current tone.
@@ -43,14 +43,26 @@ Each matrix has frequencies as columns (low → high, left to right) and volume 
 
 ## Clipboard
 
-Clicking **Copy values** writes one line per channel and frequency to the clipboard in this format:
+Clicking **Copy values** writes the current settings to the clipboard as pretty-printed JSON:
 
+```json
+{
+  "steps": 20,
+  "sequenceLengthSec": 5,
+  "delayBetweenBeepsSec": 0.2,
+  "channels": {
+    "left": [
+      { "freqHz": 125, "volumePct": 50, "volumeDb": -10 },
+      { "freqHz": 250, "volumePct": 50, "volumeDb": -10 }
+    ],
+    "right": [
+      { "freqHz": 125, "volumePct": 50, "volumeDb": -10 }
+    ]
+  }
+}
 ```
-left 125Hz 50.0%
-left 250Hz 50.0%
-…
-right 8000Hz 50.0%
-```
+
+`volumePct` is the legacy linear percent for the row; `volumeDb` is the dB-ladder value that row actually plays at (0 for the top row, −1 dB per row below).
 
 The last copied text is shown in the small preview area at the bottom of the page (first 15 lines, truncated with `…` if longer).
 
@@ -60,7 +72,7 @@ The last copied text is shown in the small preview area at the bottom of the pag
 - 5 s sequence length
 - 0.2 s delay (blips: on 0.2 s / off 0.2 s, truncated to sequence length)
 - Preset A frequencies (15 tones)
-- 50% volume per frequency
+- 50% (−10.0 dB) volume per frequency
 
 ## No test suite
 

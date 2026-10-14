@@ -58,11 +58,13 @@ function stopCurrent() {
 }
 
 
-function startTone(ch, col, btn, volPct, rowVolLabel) {
+function startTone(ch, col, btn, volPct, rowVolLabel, rowDbStr) {
   if (state.playing) stopCurrent();
 
   var freq = state.freqs[col];
-  var vol = Math.max(0, Math.min(100, volPct)) / 100;
+  // Gain from the dB ladder: row r (0 = top) plays at -r dB, gain 10^(-r/20).
+  var row = Number(btn.dataset.row);
+  var vol = Math.pow(10, (-row) / 20);
   var L = Math.max(0, state.seqLen);
   var D = Math.max(0, state.delay);
   if (L <= 0 || !freq) { return; }
@@ -91,7 +93,7 @@ function startTone(ch, col, btn, volPct, rowVolLabel) {
     var remainingMs = Math.max(0, P.duration - elapsed);
     var remainingSec = remainingMs / 1000;
     var statusText = 'playing freq=' + freq + 'Hz vol=' + rowVolLabel +
-      '% ch=' + ch + ' remaining: ' + remainingSec.toFixed(1) + 's';
+      '% (' + rowDbStr + ' dB) ch=' + ch + ' remaining: ' + remainingSec.toFixed(1) + 's';
     if (P.btnEl === btn) {
       setStatus(statusText);
     }
@@ -103,7 +105,7 @@ function startTone(ch, col, btn, volPct, rowVolLabel) {
       setStatus('idle');
     }
   }, 100);
-  setStatus('playing freq=' + freq + 'Hz vol=' + rowVolLabel + '% ch=' + ch + ' remaining: ' + L.toFixed(1) + 's');
+  setStatus('playing freq=' + freq + 'Hz vol=' + rowVolLabel + ' (' + rowDbStr + ' dB) ch=' + ch + ' remaining: ' + L.toFixed(1) + 's');
 
   // Build the oscillator graph AFTER the Tone.js context has resumed. While a
   // newly-created context is "suspended", ctx.currentTime is frozen at ~0, so
@@ -160,7 +162,7 @@ function toggleBtn(btn) {
     var col = Number(btn.dataset.col);
     var ch = btn.dataset.ch;
     var volPct = (S - row) * 100 / S;
-    startTone(ch, col, btn, volPct, rowVolLabelFromPct(S, row));
+    startTone(ch, col, btn, volPct, rowVolLabelFromPct(S, row), rowDbLabel(row));
   }
 }
 

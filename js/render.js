@@ -2,11 +2,30 @@
 // status line (setStatus), and the clipboard copy (copyValues).
 // All element ids are pinned in index.html and may not change.
 // Exposed as globals: renderChannel, attachListeners, renderCharts,
-// setStatus, copyValues, updateClipDump, rowVolLabelFromPct, defaultRowFor50.
+// setStatus, copyValues, updateClipDump, rowVolLabelFromPct, rowDbLabel,
+// rowDbValue, rowDbFromPct, defaultRowFor50.
 
 function rowVolLabelFromPct(S, row) {
   var pct = (S - row) * 100 / S;
   return pct.toFixed(1).replace(/\.0$/, '');
+}
+
+// Playback ladder in dB: row r (0 = top) plays at −r dB relative to the top
+// row (0 dB), i.e. every row is exactly 1 dB quieter than the row above it.
+// Display-only % labels (rowVolLabelFromPct) keep the legacy linear values.
+function rowDbLabel(row) {
+  return (-row).toFixed(1);
+}
+
+// dB value for a row as a number (0 for the top row, negative below).
+function rowDbValue(row) {
+  return -row;
+}
+
+// dB value for a stored percentage: invert pct -> row, then row -> dB.
+function rowDbFromPct(pct, S) {
+  var row = Math.round(S - (Number(pct) * S) / 100);
+  return rowDbValue(row);
 }
 
 // 50% (default) mapped to the nearest row index for S rows.
@@ -43,11 +62,16 @@ function renderChannel(ch) {
   var S = state.steps;
   for (var r = 0; r < S; r++) {
     var tr = tbody.appendChild(document.createElement('tr'));
-    // Row label (left side) — the single place the volume % is shown.
+    // Row label (left side) — the single place the volume is shown: legacy
+    // linear % plus the playback ladder in dB (equal -1 dB per row).
     var labelCell = document.createElement('td');
     labelCell.className = 'rowlabel';
     var lbl = rowVolLabelFromPct(S, r);
     labelCell.textContent = lbl + '%';
+    var dbDiv = document.createElement('div');
+    dbDiv.className = 'rowlabel-db';
+    dbDiv.textContent = rowDbLabel(r) + ' dB';
+    labelCell.appendChild(dbDiv);
     tr.appendChild(labelCell);
 
     for (var c2 = 0; c2 < freqs.length; c2++) {
@@ -239,8 +263,8 @@ function renderCharts() {
 //     "sequenceLengthSec": L,
 //     "delayBetweenBeepsSec": D,
 //     "channels": {
-//       "left":  [{ "freqHz": N, "volumePct": V }, ...],
-//       "right": [{ "freqHz": N, "volumePct": V }, ...]
+//       "left":  [{ "freqHz": N, "volumePct": V, "volumeDb": D }, ...],
+//       "right": [{ "freqHz": N, "volumePct": V, "volumeDb": D }, ...]
 //     }
 //   }
 function buildClipJSON() {
@@ -249,7 +273,11 @@ function buildClipJSON() {
     var rows = [];
     for (var i = 0; i < freqs.length; i++) {
       var v = state.vols[ch] ? state.vols[ch][i] : 50;
-      rows.push({ freqHz: Number(freqs[i]), volumePct: Number(v) });
+      rows.push({
+        freqHz: Number(freqs[i]),
+        volumePct: Number(v),
+        volumeDb: rowDbFromPct(v, state.steps)
+      });
     }
     return rows;
   }
@@ -311,4 +339,7 @@ window.setStatus = setStatus;
 window.copyValues = copyValues;
 window.updateClipDump = updateClipDump;
 window.rowVolLabelFromPct = rowVolLabelFromPct;
+window.rowDbLabel = rowDbLabel;
+window.rowDbValue = rowDbValue;
+window.rowDbFromPct = rowDbFromPct;
 window.defaultRowFor50 = defaultRowFor50;

@@ -22,7 +22,8 @@ No server is required.
 | **Frequency mode** (Preset A / Preset B / Custom radio buttons) | Preset A = 15-tone IEC set, Preset B = 19-tone IEC set (the default). Custom enables the text field below. |
 | **Custom** text field | Comma- or space-separated list of frequencies in Hz. Click **Apply frequencies** (or press Enter) to use them. |
 | **Reset** button | Re-enables the dB step / Min dB / Max dB inputs and the frequency controls once they have locked. Locking happens automatically the first time a value is set in the **matrix selectors** — a matrix radio change or a cell click. Changing the settings inputs or frequency mode does not lock. |
-| **Copy values** button | Copies all current channel/frequency/volume settings to the clipboard. |
+| **Copy values** button | Copies all current channel/frequency/volume settings (with a capture timestamp) to the clipboard. |
+| **Save JSON** button | Downloads the same JSON as a `zero-db-hero-<timestamp>.json` file. |
 
 ## Layout
 
@@ -53,6 +54,7 @@ Clicking **Copy values** writes the current settings to the clipboard as pretty-
 
 ```json
 {
+  "timestamp": "2026-10-14T12:34:56.789Z",
   "dbStep": 2,
   "dbMin": -80,
   "dbMax": -20,
@@ -70,7 +72,7 @@ Clicking **Copy values** writes the current settings to the clipboard as pretty-
 }
 ```
 
-`volumeDb` is the dB value the row plays at (`rowDbValue(r) = dbMax − r·dbStep`; the default row is the ladder midpoint ≈ −50.0 dB with the defaults). The row count is not included — it is derivable from `dbStep`/`dbMin`/`dbMax`.
+`timestamp` is the capture time (ISO 8601, UTC) of the moment the JSON was generated. `volumeDb` is the dB value the row plays at (`rowDbValue(r) = dbMax − r·dbStep`; the default row is the ladder midpoint ≈ −50.0 dB with the defaults). The row count is not included — it is derivable from `dbStep`/`dbMin`/`dbMax`.
 
 The last copied text is shown in full in the scrollable text area at the bottom of the page.
 

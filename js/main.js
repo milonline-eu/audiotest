@@ -5,7 +5,7 @@
 //   presets.js: PRESET_A, PRESET_B, presetFor(mode), parseCustomFrequencies(text)
 //   audio.js:   startTone, stopCurrent, toggleCell
 //   render.js:  renderChannel, attachListeners, renderCharts, setStatus,
-//              copyValues, updateClipDump, defaultMidRow
+//              copyValues, updateClipDump, saveClipJSON, defaultMidRow
 
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
@@ -271,6 +271,7 @@ function wire() {
   // Copy button
   copyBtn.addEventListener('click', copyValues);
   document.getElementById('resetBtn').addEventListener('click', function () { setLocked(false); });
+  document.getElementById('saveBtn').addEventListener('click', saveClipJSON);
 
   // Escape stops the current tone
   document.addEventListener('keydown', function (e) {

@@ -2,7 +2,7 @@
 // status line (setStatus), and the clipboard copy (copyValues).
 // All element ids are pinned in index.html and may not change.
 // Exposed as globals: renderChannel, attachListeners, renderCharts,
-// setStatus, copyValues, updateClipDump, rowDbLabel, rowDbValue,
+// setStatus, copyValues, updateClipDump, saveClipJSON, rowDbLabel, rowDbValue,
 // defaultMidRow.
 
 // Playback ladder in dB: top row (0) = state.dbMax, each row dbStep dB
@@ -242,8 +242,9 @@ function renderCharts() {
 // ---------- clipboard (JSON) ----------
 
 // Builds a JSON document of all (channel, frequency, volume) settings, plus
-// the global ladder and sequence parameters. Shape:
+// the global ladder and sequence parameters and a capture timestamp. Shape:
 //   {
+//     "timestamp": "YYYY-MM-DDTHH:MM:SS.sssZ",
 //     "dbStep": N,
 //     "dbMin": N,
 //     "dbMax": N,
@@ -268,6 +269,7 @@ function buildClipJSON() {
     return rows;
   }
   return {
+    timestamp: new Date().toISOString(),
     dbStep: Number(state.dbStep),
     dbMin: Number(state.dbMin),
     dbMax: Number(state.dbMax),
@@ -316,6 +318,25 @@ function updateClipDump() {
   document.getElementById('clipDump').value = text;
 }
 
+// Save the current JSON settings as a file download, named with the capture
+// time, e.g. zero-db-hero-2026-10-14T12-34-56-789Z.json.
+function saveClipJSON() {
+  var data = buildClipJSON();
+  var text;
+  try { text = JSON.stringify(data, null, 2); }
+  catch (e) { text = JSON.stringify(data); }
+  var blob = new Blob([text], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'zero-db-hero-' + data.timestamp.replace(/:/g, '-') + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  updateClipDump();
+}
+
 
 window.renderChannel = renderChannel;
 window.attachListeners = attachListeners;
@@ -323,6 +344,7 @@ window.renderCharts = renderCharts;
 window.setStatus = setStatus;
 window.copyValues = copyValues;
 window.updateClipDump = updateClipDump;
+window.saveClipJSON = saveClipJSON;
 window.rowDbLabel = rowDbLabel;
 window.rowDbValue = rowDbValue;
 window.defaultMidRow = defaultMidRow;

@@ -304,7 +304,7 @@ function copyValues() {
   copyText(text).then(function () {
     updateClipDump();
   }).catch(function () {
-    document.getElementById('clipDump').textContent = 'clipboard failed';
+    document.getElementById('clipDump').value = 'clipboard failed';
   });
 }
 
@@ -313,10 +313,7 @@ function updateClipDump() {
   var text;
   try { text = JSON.stringify(data, null, 2); }
   catch (e) { text = JSON.stringify(data); }
-  var lines = text.split('\n');
-  var out = lines.slice(0, 15).join('\n');
-  if (lines.length > 15) out += '\n\u2026';
-  document.getElementById('clipDump').textContent = out;
+  document.getElementById('clipDump').value = text;
 }
 
 

@@ -111,10 +111,10 @@ footer {
   background: #fff; border: 1px solid #ddd; border-radius: 6px;
   padding: 8px 10px;
 }
-footer pre {
+footer textarea {
   font: 11px/1.35 monospace;
   width: 100%; max-width: 100%;
-  overflow: auto; white-space: pre-wrap;
+  overflow: auto;
   background: #fafafa; border: 1px solid #ccc; border-radius: 4px;
   padding: 4px;
 }

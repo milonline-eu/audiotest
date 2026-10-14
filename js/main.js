@@ -295,7 +295,7 @@ function startup() {
   renderChannel('right');
   renderCharts();
   setStatus('idle');
-  document.getElementById('clipDump').textContent = '';
+  document.getElementById('clipDump').value = '';
   document.getElementById('applyFreq').disabled = true; // Preset B active
   wire();
 

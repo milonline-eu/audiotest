@@ -53,7 +53,7 @@ Zero dB Hero is a single-page web app that plays left/right sine tones from a fr
   - `renderCharts()` — draws both canvas charts: a `#555` line + red × markers, `#999` axes/gridlines, and x-axis frequency labels rotated 45° so long lists never overlap. Y-axis is **dB, auto-scaled to the data** (no fixed min/max/stepSize). Called on radio change, on re-render, and on debounced window resize.
   - `setStatus(t)` — sets the status line text.
   - `copyValues()` — copies the current settings as pretty-printed **JSON** to the clipboard, then updates `#clipDump`.
-  - `updateClipDump()` — populates `#clipDump` with the first 15 lines (truncated with `…`).
+  - `updateClipDump()` — populates the `#clipDump` textarea with the full pretty-printed JSON (the textarea is scrollable and shows everything).
   - `rowDbLabel(row)` — returns the dB-ladder label string for a row (e.g. `-20.0`).
   - `rowDbValue(row)` — returns the dB-ladder value as a number for a row: `state.dbMax − row * state.dbStep` (`state.dbMax` when `S ≤ 1`).
   - `defaultMidRow()` — returns the row index nearest the ladder midpoint `(dbMax+dbMin)/2` (−50.0 dB at row 10 of 31 with the defaults), clamped into `[0, S−1]`.

@@ -72,7 +72,7 @@ Clicking **Copy values** writes the current settings to the clipboard as pretty-
 
 `volumeDb` is the dB value the row plays at (`rowDbValue(r) = dbMax − r·dbStep`; the default row is the ladder midpoint ≈ −50.0 dB with the defaults). The row count is not included — it is derivable from `dbStep`/`dbMin`/`dbMax`.
 
-The last copied text is shown in the small preview area at the bottom of the page (first 15 lines, truncated with `…` if longer).
+The last copied text is shown in full in the scrollable text area at the bottom of the page.
 
 ## Defaults
 

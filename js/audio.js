@@ -9,7 +9,7 @@
 //             oscillator per blip. The window still ends at L, so the last
 //             blip is truncated there.
 //
-// Exposed as globals: startTone, stopCurrent, toggleBtn, rowVolLabelFromPct.
+// Exposed as globals: startTone, stopCurrent, toggleCell.
 
 function toneReady() {
   return typeof window.Tone !== 'undefined';
@@ -52,19 +52,20 @@ function stopCurrent() {
     try { p.src.stop(); } catch (e) {}
     p.src = null;
   }
-  if (p.btnEl) p.btnEl.classList.remove('active');
+  if (p.cellEl) p.cellEl.classList.remove('active');
   state.playing = null;
   setStatus('idle');
 }
 
 
-function startTone(ch, col, btn, volPct, rowVolLabel, rowDbStr) {
+function startTone(ch, col, cellEl, rowDbStr) {
   if (state.playing) stopCurrent();
 
   var freq = state.freqs[col];
-  // Gain from the configurable dB ladder: the row plays at rowDbValue(row) dB
-  // (range state.dbMax top ... state.dbMin bottom), gain 10^(db/20).
-  var row = Number(btn.dataset.row);
+  // Gain from the dB ladder: the row plays at rowDbValue(row) dB
+  // (dbMax top, dbStep dB per row), gain 10^(db/20).
+  var rowMatch = /^rad-(left|right)-\d+-(\d+)$/.exec(cellEl.querySelector('input[type=radio]').id);
+  var row = rowMatch ? Number(rowMatch[1]) : 0;
   var vol = Math.pow(10, rowDbValue(row) / 20);
   var L = Math.max(0, state.seqLen);
   var D = Math.max(0, state.delay);
@@ -78,14 +79,14 @@ function startTone(ch, col, btn, volPct, rowVolLabel, rowDbStr) {
   // Record the playing tone up front so the UI reflects "playing" even while
   // the audio context is still resuming.
   var P = {
-    ch: ch, col: col, btnEl: btn,
-    freqHz: freq, volPct: volPct, chLabel: ch,
+    ch: ch, col: col, cellEl: cellEl,
+    freqHz: freq, chLabel: ch,
     src: null, timerId: null, endTimer: null,
     startedAt: Date.now(), duration: L * 1000,
     countdownId: null
   };
   state.playing = P;
-  btn.classList.add('active');
+  cellEl.classList.add('active');
 
   // Start a 100 ms countdown timer that updates the status line with the
   // remaining time to the nearest 0.1 s.
@@ -93,9 +94,9 @@ function startTone(ch, col, btn, volPct, rowVolLabel, rowDbStr) {
     var elapsed = Date.now() - P.startedAt;
     var remainingMs = Math.max(0, P.duration - elapsed);
     var remainingSec = remainingMs / 1000;
-    var statusText = 'playing freq=' + freq + 'Hz vol=' + rowVolLabel +
-      '% (' + rowDbStr + ' dB) ch=' + ch + ' remaining: ' + remainingSec.toFixed(1) + 's';
-    if (P.btnEl === btn) {
+    var statusText = 'playing freq=' + freq + 'Hz vol=' + rowDbStr +
+      ' dB ch=' + ch + ' remaining: ' + remainingSec.toFixed(1) + 's';
+    if (P.cellEl === cellEl) {
       setStatus(statusText);
     }
     if (remainingMs <= 0) {
@@ -106,7 +107,7 @@ function startTone(ch, col, btn, volPct, rowVolLabel, rowDbStr) {
       setStatus('idle');
     }
   }, 100);
-  setStatus('playing freq=' + freq + 'Hz vol=' + rowVolLabel + ' (' + rowDbStr + ' dB) ch=' + ch + ' remaining: ' + L.toFixed(1) + 's');
+  setStatus('playing freq=' + freq + 'Hz vol=' + rowDbStr + ' dB ch=' + ch + ' remaining: ' + L.toFixed(1) + 's');
 
   // Build the oscillator graph AFTER the Tone.js context has resumed. While a
   // newly-created context is "suspended", ctx.currentTime is frozen at ~0, so
@@ -116,7 +117,7 @@ function startTone(ch, col, btn, volPct, rowVolLabel, rowDbStr) {
   var ready = (typeof window.Tone.start === 'function') ? window.Tone.start().catch(function() {}) : Promise.resolve();
   ready.then(function () {
     // Guard: the tone may have been stopped in the meantime (exclusive click,
-    // Escape, steps-change, or a new startTone). Do nothing.
+    // Escape, ladder change, or a new startTone). Do nothing.
     if (state.playing !== P) { return; }
     try {
       if (D <= 0) {
@@ -153,27 +154,21 @@ function startTone(ch, col, btn, volPct, rowVolLabel, rowDbStr) {
   });
 }
 
-// Toggle: if this is the active tone, stop; otherwise start its sequence.
-function toggleBtn(btn) {
-  if (state.playing && state.playing.btnEl === btn) {
+// Toggle: click the cell of the active tone to stop; any other cell plays
+// its (channel, frequency, row) at that row's dB gain.
+function toggleCell(cell) {
+  if (state.playing && state.playing.cellEl === cell) {
     stopCurrent();
-  } else {
-    var S = state.steps;
-    var row = Number(btn.dataset.row);
-    var col = Number(btn.dataset.col);
-    var ch = btn.dataset.ch;
-    var volPct = (S - row) * 100 / S;
-    startTone(ch, col, btn, volPct, rowVolLabelFromPct(S, row), rowDbLabel(row));
+    return;
   }
-}
-
-function rowVolLabelFromPct(S, row) {
-  var pct = (S - row) * 100 / S;
-  return pct.toFixed(1).replace(/\.0$/, '');
+  var radio = cell.querySelector('input[type=radio]');
+  if (!radio) return;
+  var m = /^rad-(left|right)-(\d+)-(\d+)$/.exec(radio.id);
+  if (!m) return;
+  startTone(m[1], Number(m[2]), cell, rowDbLabel(Number(m[3])));
 }
 
 // Expose to globals.
 window.startTone = startTone;
 window.stopCurrent = stopCurrent;
-window.toggleBtn = toggleBtn;
-window.rowVolLabelFromPct = rowVolLabelFromPct;
+window.toggleCell = toggleCell;

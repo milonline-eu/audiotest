@@ -3,18 +3,48 @@
 
 // Exposed globals from other scripts:
 //   presets.js: PRESET_A, PRESET_B, presetFor(mode), parseCustomFrequencies(text)
-//   audio.js:   startTone, stopCurrent, toggleBtn, rowVolLabelFromPct
+//   audio.js:   startTone, stopCurrent, toggleCell
 //   render.js:  renderChannel, attachListeners, renderCharts, setStatus,
-//              copyValues, updateClipDump, defaultRowFor50, rowVolLabelFromPct
+//              copyValues, updateClipDump, defaultMidRow
 
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
+}
+
+// Row count for the current ladder: 1 + round(span/step). Never < 1.
+function rowCount() {
+  return Math.max(1, Math.round((state.dbMax - state.dbMin) / state.dbStep) + 1);
 }
 
 // "Library allows" bounds for the dB ladder inputs (Tone.js dbToGain has no
 // built-in clamp): quietest meaningful floor and unity-gain ceiling.
 var DB_LIB_MIN = -1000;
 var DB_LIB_MAX = 0;
+
+// Settings lock: once any value is set in any selector, the dB ladder inputs
+// (step/Min/Max) and the frequency controls become read-only. Reset unlocks.
+// Sequence length, delay, and the matrices stay operable while locked.
+var locked = false;
+function lockedControls() {
+  var ids = ['dbStepIn', 'dbStepMinus', 'dbStepPlus', 'dbMinIn', 'dbMinMinus',
+            'dbMinPlus', 'dbMaxIn', 'dbMaxMinus', 'dbMaxPlus', 'customFreq'];
+  var els = ids.map(function (id) { return document.getElementById(id); });
+  els = els.concat(Array.prototype.slice.call(document.querySelectorAll('input[name=fm]')));
+  els.push(document.getElementById('applyFreq'));
+  return els;
+}
+function setLocked(on) {
+  if (locked === on) return;
+  locked = on;
+  lockedControls().forEach(function (el) { el.disabled = on; });
+  if (!on) {
+    // Re-apply the custom-mode rule: applyFreq/customFreq are disabled unless
+    // the frequency mode is Custom, regardless of the lock state.
+    var custom = (currentMode() === 'C');
+    document.getElementById('customFreq').disabled = !custom;
+    document.getElementById('applyFreq').disabled = !custom;
+  }
+}
 
 // Apply dir*delta to a numeric input, snap to its step, clamp to min/max.
 // Returns the new value.
@@ -79,30 +109,32 @@ function applyFrequencies() {
   renderChannel('right');
   renderCharts();
   updateClipDump();
+  setLocked(true);
 }
 
 // ----- stepper + input handlers -----
 
-// stepsIn: re-render; stopCurrent (playing tone's row no longer exists).
-function onStepsChange() {
-  var stepsIn = document.getElementById('stepsIn');
-  var v = syncFromInput(stepsIn, 1, 50);
-  state.steps = Math.max(1, Math.min(50, Math.round(v)));
+// dbStepIn: recompute row count, re-render; stopCurrent (playing tone's row
+// may no longer exist).
+function onDbStepChange() {
+  var dbStepIn = document.getElementById('dbStepIn');
+  state.dbStep = syncFromInput(dbStepIn, 0.1, 10);
+  state.steps = rowCount();
+  setLocked(true);
   stopCurrent();
   renderChannel('left');
   renderChannel('right');
   renderCharts();
   updateClipDump();
 }
-function onStepsStepper(dir) {
-  var stepsIn = document.getElementById('stepsIn');
-  var delta = dir > 0 ? 1 : -1;
-  clampWrite(stepsIn, delta);
-  onStepsChange();
+function onDbStepStepper(dir) {
+  clampWrite(document.getElementById('dbStepIn'), dir * 0.5);
+  onDbStepChange();
 }
 // lenIn: immediate only, no re-render.
 function onLenChange() {
   var lenIn = document.getElementById('lenIn');
+  setLocked(true);
   state.seqLen = syncFromInput(lenIn, 0.5, 60);
 }
 function onLenStepper(dir) {
@@ -113,6 +145,7 @@ function onLenStepper(dir) {
 // delayIn: immediate only, no re-render.
 function onDelayChange() {
   var delayIn = document.getElementById('delayIn');
+  setLocked(true);
   state.delay = syncFromInput(delayIn, 0, 30);
 }
 function onDelayStepper(dir) {
@@ -128,6 +161,8 @@ function onDbMinChange() {
   var hi = Number(dbMaxIn.value); if (!isFinite(hi)) hi = state.dbMax;
   var v = syncFromInput(dbMinIn, DB_LIB_MIN, hi);   // cross-clamp so dbMin <= dbMax
   state.dbMin = v;
+  setLocked(true);
+  state.steps = rowCount();
   stopCurrent();
   renderChannel('left');
   renderChannel('right');
@@ -140,6 +175,8 @@ function onDbMaxChange() {
   var lo = Number(dbMinIn.value); if (!isFinite(lo)) lo = state.dbMin;
   var v = syncFromInput(dbMaxIn, lo, DB_LIB_MAX);   // cross-clamp so dbMax >= dbMin
   state.dbMax = v;
+  setLocked(true);
+  state.steps = rowCount();
   stopCurrent();
   renderChannel('left');
   renderChannel('right');
@@ -158,7 +195,7 @@ function onDbMaxStepper(dir) {
 // ----- wiring -----
 
 function wire() {
-  var stepsIn = document.getElementById('stepsIn');
+  var dbStepIn = document.getElementById('dbStepIn');
   var lenIn = document.getElementById('lenIn');
   var delayIn = document.getElementById('delayIn');
   var customFreq = document.getElementById('customFreq');
@@ -166,8 +203,8 @@ function wire() {
   var copyBtn = document.getElementById('copyBtn');
 
   // steppers
-  document.getElementById('stepsInMinus').addEventListener('click', function () { onStepsStepper(-1); });
-  document.getElementById('stepsInPlus').addEventListener('click', function () { onStepsStepper(1); });
+  document.getElementById('dbStepMinus').addEventListener('click', function () { onDbStepStepper(-1); });
+  document.getElementById('dbStepPlus').addEventListener('click', function () { onDbStepStepper(1); });
   document.getElementById('lenInMinus').addEventListener('click', function () { onLenStepper(-1); });
   document.getElementById('lenInPlus').addEventListener('click', function () { onLenStepper(1); });
   document.getElementById('delayInMinus').addEventListener('click', function () { onDelayStepper(-1); });
@@ -177,12 +214,12 @@ function wire() {
   document.getElementById('dbMaxMinus').addEventListener('click', function () { onDbMaxStepper(-1); });
   document.getElementById('dbMaxPlus').addEventListener('click', function () { onDbMaxStepper(1); });
 
-  // stepsIn
-  stepsIn.addEventListener('change', onStepsChange);
-  stepsIn.addEventListener('keyup', function (e) { if (e.key === 'Enter') onStepsChange(); });
-  stepsIn.addEventListener('input', function () {
-    var raw = Number(stepsIn.value);
-    if (isFinite(raw)) state.steps = clamp(Math.round(raw), 1, 50);
+  // dbStepIn
+  dbStepIn.addEventListener('change', onDbStepChange);
+  dbStepIn.addEventListener('keyup', function (e) { if (e.key === 'Enter') onDbStepChange(); });
+  dbStepIn.addEventListener('input', function () {
+    var raw = Number(dbStepIn.value);
+    if (isFinite(raw)) state.dbStep = clamp(raw, 0.1, 10);
   });
 
   // lenIn
@@ -239,6 +276,7 @@ function wire() {
 
   // Copy button
   copyBtn.addEventListener('click', copyValues);
+  document.getElementById('resetBtn').addEventListener('click', function () { setLocked(false); });
 
   // Escape stops the current tone
   document.addEventListener('keydown', function (e) {
@@ -252,18 +290,19 @@ function wire() {
 // ----- startup -----
 
 function startup() {
-  state.steps = 20;
+  state.dbStep = 2;
   state.seqLen = 5;
   state.delay = 0.2;
   state.dbMin = -80;
   state.dbMax = -20;
-  state.freqs = presetFor('A');
+  state.steps = rowCount();
+  state.freqs = presetFor('B');
   renderChannel('left');
   renderChannel('right');
   renderCharts();
   setStatus('idle');
   document.getElementById('clipDump').textContent = '';
-  document.getElementById('applyFreq').disabled = true; // Preset A active
+  document.getElementById('applyFreq').disabled = true; // Preset B active
   wire();
 
   // Window resize -> debounced chart redraw

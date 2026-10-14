@@ -14,13 +14,14 @@ No server is required.
 
 | Control | What it does |
 |---------|-------------|
-| **Volume steps** (numeric input with −/+ steppers) | Sets how many volume rows to show (1–50). Rows form a dB ladder spanning the Min dB…Max dB range, linear in dB across the step count (default −20.0 top … −80.0 bottom). Changing this re-renders both matrices and stops any playing tone. |
-| **Min dB** (numeric input with −/+ steppers) | dB of the bottom (quietest) row; range −1000…0 dB, default −80. Must stay ≤ Max dB (clamped). Changing it redistributes the dB ladder across the current step count, re-renders the row labels, and stops any playing tone. |
+| **dB step** (numeric input with −/+ steppers) | The dB difference between adjacent rows (0.1–10, default 2). The row count is derived: `round((Max − Min) / step) + 1` (31 rows with the defaults). Changing it re-renders both matrices and stops any playing tone. |
+| **Min dB** (numeric input with −/+ steppers) | dB of the bottom (quietest) row; range −1000…0 dB, default −80. Must stay ≤ Max dB (clamped). The row count changes with it; re-renders the matrices and stops any playing tone. |
 | **Max dB** (numeric input with −/+ steppers) | dB of the top (loudest) row; range −1000…0 dB, default −20. Must stay ≥ Min dB (clamped). Same behavior as Min dB. |
 | **Sequence length (s)** (numeric input with −/+ steppers) | Total duration of each tone burst (0.5–60 s). Applied immediately; no re-render needed. |
-| **Delay between beeps (s)** (numeric input with −/+ steppers) | When > 0, the tone plays in on/off blips of this duration (0% duty = 50% on, 50% off). Applied immediately. |
-| **Frequency mode** (Preset A / Preset B / Custom radio buttons) | Preset A = 15-tone IEC set, Preset B = 19-tone IEC set. Custom enables the text field below. |
+| **Delay between beeps (s)** (numeric input with −/+ steppers) | When > 0, the tone plays in on/off blips of this duration (50% on, 50% off). Applied immediately. |
+| **Frequency mode** (Preset A / Preset B / Custom radio buttons) | Preset A = 15-tone IEC set, Preset B = 19-tone IEC set (the default). Custom enables the text field below. |
 | **Custom** text field | Comma- or space-separated list of frequencies in Hz. Click **Apply frequencies** (or press Enter) to use them. |
+| **Reset** button | Re-enables the dB step / Min dB / Max dB inputs and the frequency controls once they have locked. Locking happens automatically as soon as any value is set in any selector (settings inputs, frequency mode, a matrix radio, or clicking a cell). |
 | **Copy values** button | Copies all current channel/frequency/volume settings to the clipboard. |
 
 ## Layout
@@ -29,17 +30,19 @@ The page is split into two side-by-side columns, one per channel. In each column
 
 ## Matrix
 
-Each matrix has frequencies as columns (low → high, left to right) and volume steps as rows. Volume is shown in two units: a **dB ladder** spanning the user-set **Min dB…Max dB** (default −80.0…−20.0 dB; top row = Max dB, bottom row = Min dB, linear in dB — the actual gain the tone button plays) and a **legacy linear percent** (100% at the top, 5% at the bottom with 20 steps — display-only).
-- The row label in the left column of each matrix shows both: the percent on the top line and the dB value on the sub-line below it (e.g. `50` / `−51.6 dB` with defaults). Individual cells show no volume text.
-- Each cell holds a **radio button** (on the left) and a **tone button** (filling the rest). Clicking the radio sets that frequency's volume for that channel (clicking a radio does not play any sound); clicking the tone button plays that frequency at that row's dB gain for the configured sequence length, with the chosen inter-beep delay.
-- Only **one tone plays at a time** (exclusive). Clicking a new tone button stops the previous one.
-- Clicking the **active** (highlighted red) button again stops the tone immediately.
+Each matrix has frequencies as columns (low → high, left to right) and the dB ladder as rows. Volume is a single dB ladder: the top row plays at **Max dB**, each row is **dB step** dB quieter, and the bottom row is `Max − (rows−1)·step` (with the defaults: −20.0 top … −80.0 bottom, 2 dB per row).
+- The row label in the left column of each matrix is a single dB line (e.g. `−50.0 dB`). Column headers are bare numbers (e.g. `125`, no `Hz`).
+- Each cell holds **only a radio** selector. Clicking the cell plays that (channel, frequency, row) at that row's dB gain for the configured sequence length, with the chosen inter-beep delay; the clicked cell's radio is checked automatically.
+- The cell of the currently playing tone is **highlighted** (light red).
+- Only **one tone plays at a time** (exclusive). Clicking another cell stops the previous one.
+- Clicking the **active** (highlighted) cell again stops the tone immediately.
 - Pressing **Escape** also stops the current tone.
+- The default checked row per column is the one nearest the ladder midpoint (−50.0 dB with the defaults).
 
 ## Charts
 
 - **X-axis**: frequencies, low → high, plotted by index (not by Hz value). Labels are rotated so long lists never overlap.
-- **Y-axis**: 0–100% volume, with gridlines at 0, 25, 50, 75, 100.
+- **Y-axis**: dB volume, auto-scaled to the data (default −80…−20 range).
 - **Data line**: a grey line connecting the volume of each frequency.
 - **Markers**: a red × at each point (one per frequency).
 
@@ -49,33 +52,34 @@ Clicking **Copy values** writes the current settings to the clipboard as pretty-
 
 ```json
 {
-  "steps": 20,
+  "dbStep": 2,
+  "dbMin": -80,
+  "dbMax": -20,
   "sequenceLengthSec": 5,
   "delayBetweenBeepsSec": 0.2,
   "channels": {
     "left": [
-      { "freqHz": 125, "volumePct": 50, "volumeDb": -51.578947368421055 },
-      { "freqHz": 250, "volumePct": 50, "volumeDb": -51.578947368421055 }
+      { "freqHz": 125, "volumeDb": -50 },
+      { "freqHz": 160, "volumeDb": -50 }
     ],
     "right": [
-      { "freqHz": 125, "volumePct": 50, "volumeDb": -51.578947368421055 }
+      { "freqHz": 125, "volumeDb": -50 }
     ]
   }
 }
 ```
 
-`volumePct` is the legacy linear percent for the row; `volumeDb` is the dB-ladder value that row actually plays at (top row = Max dB, bottom row = Min dB, linear in dB across the step count — with the defaults a 50% row reports ≈ −51.58).
+`volumeDb` is the dB value the row plays at (`rowDbValue(r) = dbMax − r·dbStep`; the default row is the ladder midpoint ≈ −50.0 dB with the defaults). The row count is not included — it is derivable from `dbStep`/`dbMin`/`dbMax`.
 
 The last copied text is shown in the small preview area at the bottom of the page (first 15 lines, truncated with `…` if longer).
 
 ## Defaults
 
-- 20 volume steps
-- Min dB −80 / Max dB −20 (ladder: −20.0 top … −80.0 bottom, linear in dB)
+- dB step 2 dB, Min dB −80 / Max dB −20 → 31 rows (−20.0 top … −80.0 bottom)
 - 5 s sequence length
 - 0.2 s delay (blips: on 0.2 s / off 0.2 s, truncated to sequence length)
-- Preset A frequencies (15 tones)
-- 50% volume per frequency (the default checked row is the middle row, whose dB is whatever the ladder gives — ≈ −51.6 dB with the default range, not a fixed −10 dB)
+- Preset B frequencies (19 tones)
+- default volume per frequency = ladder midpoint (−50.0 dB with the defaults)
 
 ## No test suite
 

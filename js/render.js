@@ -2,38 +2,32 @@
 // status line (setStatus), and the clipboard copy (copyValues).
 // All element ids are pinned in index.html and may not change.
 // Exposed as globals: renderChannel, attachListeners, renderCharts,
-// setStatus, copyValues, updateClipDump, rowVolLabelFromPct, rowDbLabel,
-// rowDbValue, rowDbFromPct, defaultRowFor50.
+// setStatus, copyValues, updateClipDump, rowDbLabel, rowDbValue,
+// defaultMidRow.
 
-function rowVolLabelFromPct(S, row) {
-  var pct = (S - row) * 100 / S;
-  return pct.toFixed(1).replace(/\.0$/, '');
-}
-
-// Playback ladder in dB: top row (0) = state.dbMax, bottom row (S-1) =
-// state.dbMin, linear in dB across state.steps rows. The display-only %
-// labels (rowVolLabelFromPct) keep the legacy linear values.
+// Playback ladder in dB: top row (0) = state.dbMax, each row dbStep dB
+// quieter (state.dbStep); bottom row (S-1) = dbMax - (S-1)*dbStep.
 function rowDbLabel(row) {
   return rowDbValue(row).toFixed(1);
 }
 
-// dB value for a row as a number (state.dbMax for the top row,
-// state.dbMin for the bottom row, linear in dB between them).
+// dB value for a row as a number: top row (0) = state.dbMax, each row
+// dbStep dB quieter. Bottom row (S-1) = dbMax - (S-1)*dbStep (>= dbMin;
+// when dbStep doesn't divide the span, the bottom row sits one step
+// above dbMin).
 function rowDbValue(row) {
   var S = state.steps;
   if (S <= 1) return state.dbMax;                 // one row = top = max
-  return state.dbMax + row * ((state.dbMin - state.dbMax) / (S - 1));
+  return state.dbMax - row * state.dbStep;
 }
 
-// dB value for a stored percentage: invert pct -> row, then row -> dB.
-function rowDbFromPct(pct, S) {
-  var row = Math.round(S - (Number(pct) * S) / 100);
-  return rowDbValue(row);
-}
-
-// 50% (default) mapped to the nearest row index for S rows.
-function defaultRowFor50(S) {
-  var r = Math.round(S / 2);
+// Row nearest the ladder midpoint (dbMax+dbMin)/2; exact for the defaults
+// (-50.0 dB at row 10 of 31). Clamped into [0, S-1].
+function defaultMidRow() {
+  var S = state.steps;
+  if (S <= 1) return 0;
+  var mid = (state.dbMax + state.dbMin) / 2;
+  var r = Math.round((state.dbMax - mid) / state.dbStep);
   return Math.max(0, Math.min(S - 1, r));
 }
 
@@ -57,7 +51,7 @@ function renderChannel(ch) {
   var freqs = state.freqs;
   for (var c = 0; c < freqs.length; c++) {
     var th = document.createElement('th');
-    th.textContent = freqs[c] + 'Hz';
+    th.textContent = freqs[c];
     headerRow.appendChild(th);
   }
 
@@ -65,16 +59,11 @@ function renderChannel(ch) {
   var S = state.steps;
   for (var r = 0; r < S; r++) {
     var tr = tbody.appendChild(document.createElement('tr'));
-    // Row label (left side) — the single place the volume is shown: legacy
-    // linear % plus the playback ladder in dB (state.dbMax top ... state.dbMin bottom).
+    // Row label (left side) — the single place the volume is shown: the
+    // playback ladder in dB (state.dbMax top, dbStep dB per row).
     var labelCell = document.createElement('td');
     labelCell.className = 'rowlabel';
-    var lbl = rowVolLabelFromPct(S, r);
-    labelCell.textContent = lbl + '%';
-    var dbDiv = document.createElement('div');
-    dbDiv.className = 'rowlabel-db';
-    dbDiv.textContent = rowDbLabel(r) + ' dB';
-    labelCell.appendChild(dbDiv);
+    labelCell.textContent = rowDbLabel(r) + ' dB';
     tr.appendChild(labelCell);
 
     for (var c2 = 0; c2 < freqs.length; c2++) {
@@ -85,17 +74,8 @@ function renderChannel(ch) {
       radio.type = 'radio';
       radio.name = 'vol-' + ch + '-' + c2;
       radio.id = 'rad-' + ch + '-' + c2 + '-' + r;
-      radio.value = lbl;
+      radio.value = String(rowDbValue(r));
       cell.appendChild(radio);
-
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'tone';
-      btn.dataset.ch = ch;
-      btn.dataset.col = c2;
-      btn.dataset.row = r;
-      btn.setAttribute('aria-label', ch + ' ' + freqs[c2] + 'Hz');
-      cell.appendChild(btn);
       tr.appendChild(cell);
     }
   }
@@ -106,19 +86,19 @@ function renderChannel(ch) {
     container.appendChild(table);
   }
 
-  // Default: select the 50% row radio per frequency.
-  var defRow = defaultRowFor50(S);
+  // Default: select the ladder-midpoint row radio per frequency.
+  var defRow = defaultMidRow();
   state.vols[ch] = new Array(freqs.length).fill(0);
   for (var c3 = 0; c3 < freqs.length; c3++) {
-    state.vols[ch][c3] = Number(rowVolLabelFromPct(S, defRow));
+    state.vols[ch][c3] = rowDbValue(defRow);
     var radio50 = document.getElementById('rad-' + ch + '-' + c3 + '-' + defRow);
     if (radio50) radio50.checked = true;
   }
 }
 
 // Attach delegated listeners ONCE (called by main.js after build).
-// Radio change: update state.vols, charts, clipDump.
-// Button click: toggle tone (delegate on each matrix container).
+// Radio change: update state.vols, charts, clipDump, engage the lock.
+// Cell click: play the cell's (channel, frequency, row); engage the lock.
 function attachListeners() {
   var radioPattern = /^rad-(left|right)-(\d+)-\d+$/;
   ['matrix-L', 'matrix-R'].forEach(function (id) {
@@ -131,23 +111,27 @@ function attachListeners() {
       var chName = m[1];
       var col = Number(m[2]);
       state.vols[chName][col] = Number(t.value);
+      setLocked(true);
       renderCharts();
       updateClipDump();
     });
     container.addEventListener('click', function (e) {
-      var btn = e.target && e.target.closest ? e.target.closest('button.tone') : null;
-      if (!btn) return;
-      // Auto-select the radio selector in this cell so it always reflects the
-      // (channel, frequency, volume-step) that the button plays.
-      var cell = btn.parentElement;
-      var cellRadio = cell ? cell.querySelector('input[type=radio]') : null;
-      if (cellRadio && !cellRadio.checked) {
+      var cell = e.target && e.target.closest ? e.target.closest('td.cell') : null;
+      if (!cell) return;
+      var cellRadio = cell.querySelector('input[type=radio]');
+      if (!cellRadio) return;
+      var m = radioPattern.exec(cellRadio.id);
+      if (!m) return;
+      // Auto-select the radio in this cell so it always reflects the
+      // (channel, frequency, row) that the cell plays.
+      if (!cellRadio.checked) {
         cellRadio.checked = true;
-        state.vols[btn.dataset.ch][Number(btn.dataset.col)] = Number(cellRadio.value);
+        state.vols[m[1]][Number(m[2])] = Number(cellRadio.value);
         renderCharts();
         updateClipDump();
       }
-      toggleBtn(btn);
+      setLocked(true);
+      toggleCell(cell);
     });
   });
 }
@@ -155,7 +139,7 @@ function attachListeners() {
 // ---------- charts ----------
 
 // Charts are rendered with Chart.js (lib/chart.js.min.js). Each channel gets a
-// full-width Line chart: x = frequencies (by index), y = volume % (0-100),
+// full-width Line chart: x = frequencies (by index), y = volume in dB,
 // a gray line with red "x" (cross) markers. The instances are kept in
 // window.__chartL / window.__chartR so that renderCharts() can update the
 // same canvas rather than destroying/recreating it on every change.
@@ -173,10 +157,8 @@ var _chartOptions = {
       ticks: { autoSkip: false, maxRotation: 45, font: { size: 9 } }
     },
     y: {
-      min: 0,
-      max: 100,
-      title: { display: true, text: 'Volume (%)', font: { size: 11 } },
-      ticks: { stepSize: 25, font: { size: 11 } }
+      title: { display: true, text: 'Volume (dB)', font: { size: 11 } },
+      ticks: { font: { size: 11 } }
     }
   }
 };
@@ -192,7 +174,7 @@ function _fitXTickFont(ch) {
   var slot = usable / freqs.length;
   var maxChars = 2;
   freqs.forEach(function (f) {
-    var len = (String(f) + 'Hz').length;
+    var len = String(f).length;
     if (len > maxChars) maxChars = len;
   });
   var fs = (slot - 4) / (0.55 * maxChars);
@@ -260,32 +242,35 @@ function renderCharts() {
 // ---------- clipboard (JSON) ----------
 
 // Builds a JSON document of all (channel, frequency, volume) settings, plus
-// the global sequence parameters. Shape:
+// the global ladder and sequence parameters. Shape:
 //   {
-//     "steps": N,
+//     "dbStep": N,
+//     "dbMin": N,
+//     "dbMax": N,
 //     "sequenceLengthSec": L,
 //     "delayBetweenBeepsSec": D,
 //     "channels": {
-//       "left":  [{ "freqHz": N, "volumePct": V, "volumeDb": D }, ...],
-//       "right": [{ "freqHz": N, "volumePct": V, "volumeDb": D }, ...]
+//       "left":  [{ "freqHz": N, "volumeDb": D }, ...],
+//       "right": [{ "freqHz": N, "volumeDb": D }, ...]
 //     }
 //   }
+// The row count is not included: it is derivable from dbStep/dbMin/dbMax.
 function buildClipJSON() {
   var freqs = state.freqs.slice();
   function block(ch) {
     var rows = [];
     for (var i = 0; i < freqs.length; i++) {
-      var v = state.vols[ch] ? state.vols[ch][i] : 50;
       rows.push({
         freqHz: Number(freqs[i]),
-        volumePct: Number(v),
-        volumeDb: rowDbFromPct(v, state.steps)
+        volumeDb: state.vols[ch] ? state.vols[ch][i] : rowDbValue(defaultMidRow())
       });
     }
     return rows;
   }
   return {
-    steps: Number(state.steps),
+    dbStep: Number(state.dbStep),
+    dbMin: Number(state.dbMin),
+    dbMax: Number(state.dbMax),
     sequenceLengthSec: Number(state.seqLen),
     delayBetweenBeepsSec: Number(state.delay),
     channels: {
@@ -341,8 +326,6 @@ window.renderCharts = renderCharts;
 window.setStatus = setStatus;
 window.copyValues = copyValues;
 window.updateClipDump = updateClipDump;
-window.rowVolLabelFromPct = rowVolLabelFromPct;
 window.rowDbLabel = rowDbLabel;
 window.rowDbValue = rowDbValue;
-window.rowDbFromPct = rowDbFromPct;
-window.defaultRowFor50 = defaultRowFor50;
+window.defaultMidRow = defaultMidRow;

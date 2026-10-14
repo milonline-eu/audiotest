@@ -29,7 +29,7 @@ header h1 { font-size: 20px; padding-bottom: 8px; }
 #settings input[type=number] { width: 56px; font-family: monospace; }
 #customFreq { width: 190px; font-family: monospace; font-size: 11px; }
 #customFreq[disabled] { opacity: .55; background: #eee; }
-/* Frequency mode block sits on its own line, below the Volume steps label. */
+/* Frequency mode block sits on its own line, below the dB step label. */
 #settings .freq-mode {
   width: 100%;
   justify-content: flex-start;
@@ -74,8 +74,8 @@ button:disabled { opacity: .5; cursor: default; }
   min-width: 0;
 }
 
-/* Matrix: row labels on the left; visible radio + tone button in each cell.
-   Volume values are shown only by the row labels on the left (not per cell). */
+/* Matrix: row labels on the left; a radio only in each cell. Clicking a cell
+   plays the tone for that (channel, frequency, row). */
 .matrix-scroll table { border-collapse: collapse; table-layout: fixed; }
 .matrix-scroll th {
   font-size: 11px; text-align: center;
@@ -90,23 +90,13 @@ button:disabled { opacity: .5; cursor: default; }
   min-width: 56px; text-align: center;
   font-family: monospace; font-size: 11px;
 }
-/* dB sub-line under the % in each row label (equal -1 dB per row). */
-.matrix-scroll td.rowlabel .rowlabel-db {
-  font-size: 9px; color: #666; margin-top: 1px;
-}
-/* Each cell: radio on the left, tone button filling the rest. */
 .matrix-scroll input[type=radio] {
   display: inline-block;
   width: 14px; height: 14px;
   margin: 0; flex: 0 0 auto;
 }
-.matrix-scroll .tone {
-  flex: 1; height: 20px; min-width: 28px;
-  border: 1px solid #999; border-radius: 3px;
-  background: #fff; font-size: 0; cursor: pointer; padding: 0;
-}
-.matrix-scroll .tone:hover { background: #f2f2f2; }
-.matrix-scroll .tone.active { border-color: #d63333; background: #f7b7b7; }
+/* Playing highlight: the cell of the currently playing tone. */
+.matrix-scroll td.cell.active { background: #f7b7b7; }
 
 /* Footer: copy button + clipboard preview. */
 footer {

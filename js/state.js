@@ -1,12 +1,13 @@
 // Global state object shared by all modules.
-// Row r (0 = top) volume value: (S - r) * 100 / S  ->  100% top ... 5% bottom (S=20).
-// Playback dB ladder spans state.dbMax (top row) to state.dbMin (bottom row),
-// linear in dB across state.steps rows.
+// Volume is the dB ladder only: top row (0) = state.dbMax, each row
+// dbStep dB quieter. state.steps is the derived row count
+// (round((dbMax - dbMin) / dbStep) + 1), recomputed on every ladder change.
 var state = {
   freqs: [],
-  steps: 20,
+  steps: 0, // derived row count; recomputed from the dB ladder, never user-set
   seqLen: 5,
   delay: 0,
+  dbStep: 2, // dB difference between adjacent rows (input range 0.1-10)
   dbMin: -80, // dB of the BOTTOM row (quietest / most negative)
   dbMax: -20, // dB of the TOP row (loudest / least negative)
   vols: { left: [], right: [] },

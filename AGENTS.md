@@ -2,11 +2,14 @@
 
 ## Purpose
 
-The Audio Tone Matrix is a single-page web app that plays left/right sine tones from a frequency×volume-step button matrix. Each channel has a matrix where columns are frequencies and rows are volume steps (100% at top, 5% at bottom). Each cell contains a radio button (sets that frequency's volume for that channel) and a tone button (plays that frequency at that volume for the configured sequence length with inter-beep delay). Two canvas charts show the volume per frequency for each channel. A status line shows `idle` or `playing freq=XHz vol=Y% ch=left|right`. A clipboard copy button writes all current (channel, frequency, volume) values. The playback dB ladder spans a user-set **Min dB** (bottom row, default −80) and **Max dB** (top row, default −20), linear in dB across the volume steps.
+The Audio Tone Matrix is a single-page web app that plays left/right sine tones from a frequency×dB-step matrix. Each channel has a matrix where columns are frequencies (bare numbers, no `Hz` suffix) and rows are the dB ladder: the top row plays at **Max dB** (default −20) and each row is **dB step** (default 2 dB) quieter. The row count is derived, not set: `round((dbMax − dbMin) / dbStep) + 1` → 31 rows with the defaults (−20.0 dB top … −80.0 dB bottom). Each cell holds a **radio only** (sets that frequency's row for that channel); clicking the cell plays that (channel, frequency, row) at that row's dB gain for the configured sequence length with inter-beep delay, and the cell is highlighted while the tone plays. Two canvas charts show the dB volume per frequency for each channel (y-axis in dB, auto-scaled). A status line shows `idle` or `playing freq=XHz vol=Y dB ch=left|right remaining: Zs`. A clipboard copy button writes all current (channel, frequency, volume) values as dB-only JSON.
 
-**Volume model** — two units are shown side by side:
-- **Percent (legacy, display-only)**: row r (0 = top) label `(S - r) * 100 / S` → 100% top … 5% bottom (S=20). Shown in the row label (main line), the chart y-axis (0–100), and `volumePct` in the clipboard JSON.
-- **dB (playback ladder)**: row r plays at `dbMax + r * (dbMin − dbMax) / (S − 1)` dB — top row (0) = `state.dbMax`, bottom row (S−1) = `state.dbMin`, linear in dB (defaults: −20 top … −80 bottom, S=20). `dbMin`/`dbMax` are user-set via the Min dB / Max dB inputs (library bounds −1000…0 dB, cross-clamped so `dbMin ≤ dbMax`). Gain = `10^(db/20)`. This is what the audio engine uses. Shown in the row label (sub-line, `.rowlabel-db`), the status line `vol=Y% (Z dB)`, and `volumeDb` in the clipboard JSON.
+**Settings lock**: once any value has been set in any selector (a settings input change/stepper/Enter, a frequency-mode change or apply, a matrix radio change, or a cell click), the **dB step / Min dB / Max dB inputs (incl. their −/+ steppers) and the frequency controls become disabled**. The footer **Reset** button re-enables them. Sequence length, delay, and the matrices stay operable while locked. Reset only re-enables controls — it restores no values and stops no playing tone.
+
+**Volume model** — a single dB ladder, no percent:
+- Row r (0 = top) plays at `dbMax − r * dbStep` dB (`rowDbValue(r)`). Top row = `state.dbMax`, each row `state.dbStep` dB quieter; bottom row (S−1) = `dbMax − (S−1)·dbStep` (≥ `dbMin`; when `dbStep` doesn't divide the span, the bottom row sits one step above `dbMin`). Gain = `10^(db/20)` — the actual gain the audio engine applies.
+- `dbStep` is user-set via the **dB step** input (0.1–10, default 2); `dbMin`/`dbMax` via the Min dB / Max dB inputs (library bounds −1000…0 dB, cross-clamped so `dbMin ≤ dbMax`). The row count `state.steps` is derived: `round((dbMax − dbMin) / dbStep) + 1`, recomputed whenever any of the three changes.
+- Shown in the single-line row label (`−20.0 dB` …), the status line (`vol=Y dB`), the chart y-axis (dB), and `volumeDb` in the clipboard JSON.
 
 ## Files
 
@@ -14,28 +17,30 @@ The Audio Tone Matrix is a single-page web app that plays left/right sine tones 
 |------|-------------|
 | `index.html` | The only app file. Contains all HTML markup. CSS is in `css/styles.css`. JS is in `js/` (multiple files loaded in order). |
 | `css/styles.css` | All styles. |
-| `js/state.js` | Declares the global `state` object (`freqs`, `steps`, `seqLen`, `delay`, `dbMin`, `dbMax`, `vols`, `playing`). |
+| `js/state.js` | Declares the global `state` object (`freqs`, `steps` (derived), `seqLen`, `delay`, `dbStep`, `dbMin`, `dbMax`, `vols`, `playing`). |
 | `js/presets.js` | Frequency preset arrays (`PRESET_A`, `PRESET_B`) and the `parseCustomFrequencies(text)` helper. |
-| `js/audio.js` | Playback engine: `startTone()`, `stopCurrent()`, `toggleBtn()`, `rowVolLabelFromPct()`. Gain comes from the configurable dB ladder (`10^(rowDbValue(row)/20)`). |
-| `js/render.js` | Rendering: `renderChannel(ch)`, `renderCharts()`, `setStatus()`, `copyValues()`, `updateClipDump()`, `defaultRowFor50()`, `rowVolLabelFromPct()`, `rowDbLabel()`, `rowDbValue()`, `rowDbFromPct()`. |
-| `js/main.js` | Event wiring and initialization. |
+| `js/audio.js` | Playback engine: `startTone()`, `stopCurrent()`, `toggleCell()`. Gain comes from the dB ladder (`10^(rowDbValue(row)/20)`). |
+| `js/render.js` | Rendering: `renderChannel(ch)`, `renderCharts()`, `setStatus()`, `copyValues()`, `updateClipDump()`, `defaultMidRow()`, `rowDbLabel()`, `rowDbValue()`. |
+| `js/main.js` | Event wiring and initialization, incl. `rowCount()` (derived row count) and `setLocked()` (settings lock). |
 | `README.md` | User-facing quick-start. |
 | `AGENTS.md` | This file — agent-facing project guide. |
 | `lib/Tone.js` | External audio library (Tone.js v15.1.22) loaded before the app JS. |
+
 ## Architecture
 
 - **Single-page app**: all functionality is on `index.html`; CSS is external (`css/styles.css`); JS is split into 5 files loaded in order: `state.js`, `presets.js`, `audio.js`, `render.js`, `main.js`.
 - **`state` object** (global, declared in `state.js`):
   - `freqs: number[]` — current frequency list in Hz (low→high).
-  - `steps: number` — number of volume steps (1–50).
+  - `steps: number` — derived row count; recomputed from `dbStep`/`dbMin`/`dbMax` via `rowCount()`, never user-set.
   - `seqLen: number` — total sequence length in seconds (0.5–60).
   - `delay: number` — inter-beep delay in seconds (0–30).
+  - `dbStep: number` — dB difference between adjacent rows (0.1–10); default 2.
   - `dbMin: number` — dB of the BOTTOM row (quietest / most negative); default −80.
   - `dbMax: number` — dB of the TOP row (loudest / least negative); default −20.
-  - `vols: { left: number[], right: number[] }` — current volume percentage per frequency per channel.
-  - `playing: {ch, col, btnEl, src, timerId, endTimer} | null` — current playing tone; `src` is the Tone.js chain `{osc, gain, pan, stop()}` (or null).
+  - `vols: { left: number[], right: number[] }` — current volume **in dB** per frequency per channel (the row's `rowDbValue`).
+  - `playing: {ch, col, cellEl, src, timerId, endTimer} | null` — current playing tone; `cellEl` is the highlighted `td.cell`; `src` is the Tone.js chain `{osc, gain, pan, stop()}` (or null).
 - **Tone.js (external, `lib/Tone.js` v15.1.22)**: playback uses Tone.js instead of raw Web Audio.
-  - Tones are built as `Tone.Oscillator(freq, 'sine') → Tone.Gain(vol) → Tone.Panner(pan) → Tone.getDestination()`. `vol` is the dB-ladder gain `10^(rowDbValue(row)/20)` (row 0 = `state.dbMax`), not a percentage.
+  - Tones are built as `Tone.Oscillator(freq, 'sine') → Tone.Gain(vol) → Tone.Panner(pan) → Tone.getDestination()`. `vol` is the dB-ladder gain `10^(rowDbValue(row)/20)`.
   - `Tone.Panner` value `−1` = fully left, `+1` = fully right; set per `ch` in `makeSource(freq, vol, ch, dur)`.
   - `startTone` awaits `Tone.start()` (the context-running promise) before building the chain so `Tone.context.currentTime` is accurate when scheduling `osc.stop(t + dur)`.
   - `stopCurrent()` calls `stop()` on the stored chain and `dispose()`s the nodes.
@@ -43,58 +48,56 @@ The Audio Tone Matrix is a single-page web app that plays left/right sine tones 
   - `#channels` is a CSS grid of two columns; each `.channel` has its chart (`#chartL`/`#chartR`) above its matrix (`#matrix-L`/`#matrix-R`).
   - `#status` is a `<div>` with `position: fixed; bottom: 0` so it is always visible while scrolling.
 - **Rendering functions** (in `js/render.js`):
-  - `renderChannel(ch)` — builds the HTML table for the left or right matrix. Each cell (`.cell`) holds a visible radio + a `.tone` button; the cell shows **no** volume text — the volume is shown only by the row label in the leftmost column: the legacy percent on the main line and the dB ladder value (`.rowlabel-db` sub-line) below it. Called on frequency/steps change. Resets all radios to unselected, then checks the 50% radio per frequency column.
-  - `renderCharts()` — draws both canvas charts: a `#555` line + red × markers, `#999` axes/gridlines, and x-axis frequency labels rotated 45° so long lists never overlap. Y-axis is the legacy percent (0–100). Called on radio change, on re-render, and on debounced window resize.
+  - `renderChannel(ch)` — builds the HTML table for the left or right matrix. Column headers are **bare frequency numbers** (no `Hz` suffix). Each cell (`.cell`) holds **only a radio** (`value` = the row's dB string); clicking the cell plays (delegated `click` in `attachListeners`). The row label in the leftmost column is a single dB line (e.g. `−50.0 dB`) — the only volume text in the matrix. Called on frequency/ladder change. Resets all radios to unselected, then checks the midpoint-row radio per frequency column.
+  - `renderCharts()` — draws both canvas charts: a `#555` line + red × markers, `#999` axes/gridlines, and x-axis frequency labels rotated 45° so long lists never overlap. Y-axis is **dB, auto-scaled to the data** (no fixed min/max/stepSize). Called on radio change, on re-render, and on debounced window resize.
   - `setStatus(t)` — sets the status line text.
   - `copyValues()` — copies the current settings as pretty-printed **JSON** to the clipboard, then updates `#clipDump`.
   - `updateClipDump()` — populates `#clipDump` with the first 15 lines (truncated with `…`).
-  - `rowVolLabelFromPct(S, row)` — returns the legacy percent label string for a given step count and row.
   - `rowDbLabel(row)` — returns the dB-ladder label string for a row (e.g. `-20.0`).
-  - `rowDbValue(row)` — returns the dB-ladder value as a number for a row: `state.dbMax` for the top row, `state.dbMin` for the bottom row, linear in dB across `state.steps` rows (`dbMax + row * (dbMin − dbMax) / (S − 1)`; `dbMax` when `S ≤ 1`).
-  - `rowDbFromPct(pct, S)` — inverts a stored percent to its row, then to the dB-ladder value.
-  - `defaultRowFor50(S)` — returns the row index that represents 50% volume.
+  - `rowDbValue(row)` — returns the dB-ladder value as a number for a row: `state.dbMax − row * state.dbStep` (`state.dbMax` when `S ≤ 1`).
+  - `defaultMidRow()` — returns the row index nearest the ladder midpoint `(dbMax+dbMin)/2` (−50.0 dB at row 10 of 31 with the defaults), clamped into `[0, S−1]`.
 - **Playback functions** (in `js/audio.js`):
-  - `startTone(ch, col, btn, volPct, rowVolLabel, rowDbStr)` — starts playing a tone. If a tone is already playing, `stopCurrent()` is called first. The status line shows `vol=Y% (Z dB)`.
-  - `stopCurrent()` — stops the current tone, clears timers, removes the active class, resets `state.playing` to null, sets status to `idle`.
-  - `toggleBtn(btn)` — if `btn === state.playing.btnEl`, calls `stopCurrent()`; otherwise calls `startTone()`.
-  - `rowVolLabelFromPct(S, row)` — returns the legacy percent label string for a given step count and row.
+  - `startTone(ch, col, cellEl, rowDbStr)` — starts playing a tone (row and channel are parsed from the cell's radio `id`). If a tone is already playing, `stopCurrent()` is called first. Adds the `active` class to `cellEl`; the status line shows `playing freq=XHz vol=Y dB ch=… remaining: Zs`.
+  - `stopCurrent()` — stops the current tone, clears timers, removes the `active` class from the cell, resets `state.playing` to null, sets status to `idle`.
+  - `toggleCell(cell)` — if `cell === state.playing.cellEl`, calls `stopCurrent()`; otherwise calls `startTone()` for the cell's (channel, column, row).
+- **Settings lock** (in `js/main.js`):
+  - `setLocked(on)` — disables/enables the locked controls: `dbStepIn`/`dbStepMinus`/`dbStepPlus`, `dbMinIn`/`dbMinMinus`/`dbMinPlus`, `dbMaxIn`/`dbMaxMinus`/`dbMaxPlus`, the `fm` frequency-mode radios, `customFreq`, `applyFreq`. Called `setLocked(true)` from every committed value-set path (settings change/stepper/Enter, `applyFrequencies`, matrix radio `change`, cell `click`). Called `setLocked(false)` by the footer **Reset** button; unlocking re-applies the custom-mode rule (`customFreq`/`applyFreq` disabled unless the mode is Custom). Sequence length, delay, and the matrices are never locked.
 
 ## How to extend
 
 - **Add a new frequency preset**: declare a new const array in `js/presets.js` next to `PRESET_A`/`PRESET_B`, add it to the `PRESETS` object, then reference it in the frequency-mode radio handler in `js/main.js`.
 - **Change chart marker or colors**: edit the `drawChart()` function in `js/render.js`. The current colors are: axes/grid `#999`, data line `#555`, markers `#d63333`.
-- **Add new UI elements**: any new UI must be rendered by the three main rendering functions (`renderChannel`, `renderCharts`, `setStatus`/`updateClipDump`) so that re-renders (triggered by frequency or steps changes) stay in sync.
+- **Add new UI elements**: any new UI must be rendered by the three main rendering functions (`renderChannel`, `renderCharts`, `setStatus`/`updateClipDump`) so that re-renders (triggered by frequency or ladder changes) stay in sync.
 
 ## Testing
 
 No automated test suite exists. Verification is manual:
 
 1. Open `index.html` in a modern browser.
-2. Verify: two matrices (15 columns × 20 rows), two charts, status line shows `idle`, `#clipDump` is empty. Row labels show the legacy % on the top line and the dB ladder value (e.g. `−20.0 dB` top … `−80.0 dB` bottom with defaults) on the sub-line below it. The Min dB / Max dB inputs show −80 / −20.
-3. Click a tone button — verify status changes to `playing freq=XHz vol=Y% (Z dB) ch=Z`, button turns active (red), then returns to idle after `seqLen` seconds.
-4. Click a second tone button while the first is playing — verify the first stops (exclusive) and the second starts.
-5. Click the active button again — verify it stops immediately.
+2. Verify: two matrices (19 columns × 31 rows — Preset B default), two charts, status line shows `idle`, `#clipDump` is empty. Column headers are bare numbers `125 … 8000` (no `Hz`). Row labels are a single dB line: `−20.0 dB` top … `−80.0 dB` bottom. The Min dB / Max dB inputs show −80 / −20 and the dB step input shows 2.
+3. Click a matrix cell (there is no tone button) — verify the tone plays, the cell is highlighted (light red), status changes to `playing freq=XHz vol=Y dB ch=… remaining: Zs`, and the cell's radio becomes checked.
+4. Click a second cell while the first is playing — verify the first stops (exclusive) and the second starts and is highlighted.
+5. Click the active (highlighted) cell again — verify it stops immediately and the highlight is removed.
 6. Press Escape — verify the current tone stops.
 7. Change a radio button — verify the chart updates.
-8. Click "Copy values" — verify the clipboard contains pretty-printed JSON with keys `steps`, `sequenceLengthSec`, `delayBetweenBeepsSec`, and a `channels.left`/`channels.right` array of `{"freqHz":N,"volumePct":V,"volumeDb":D}` objects.
-9. Toggle between Preset A (15 tones), Preset B (19 tones), and Custom frequencies — verify the matrices and charts update.
-10. Use the steppers to change steps, sequence length, and delay — verify the input values and behavior update correctly.
+8. Click "Copy values" — verify the clipboard contains pretty-printed JSON with keys `dbStep`, `dbMin`, `dbMax`, `sequenceLengthSec`, `delayBetweenBeepsSec`, and a `channels.left`/`channels.right` array of `{"freqHz":N,"volumeDb":D}` objects (no `volumePct`).
+9. Set any value (e.g. click a cell or a radio) — verify the dB step / Min dB / Max dB inputs (incl. steppers) and the frequency controls become disabled; click **Reset** → they re-enable (Apply frequencies stays disabled unless the mode is Custom).
+10. Toggle between Preset A (15 tones), Preset B (19 tones, the default), and Custom frequencies — verify the matrices and charts update.
+11. Use the steppers to change dB step, Min/Max dB, sequence length, and delay — verify the input values and behavior update correctly (ladder changes re-render the matrices with the derived row count and stop any playing tone).
 
 ## Conventions
 
-- Vanilla JS only — no build step, no CDNs. One external audio library, `lib/Tone.js` (Tone.js v15.1.22), is loaded from `index.html` before the app scripts.
+- Vanilla JS only — no build step, no CDNs. One external audio library, `lib/Tone.js` (Tone.js v15.1.22), and Chart.js (`lib/chart.js.min.js`) are loaded from `index.html` before the app scripts.
 - All user-facing element IDs are pinned in `index.html` and must not change:
-  - Numeric inputs: `stepsIn`, `lenIn`, `delayIn`, `dbMinIn`, `dbMaxIn`
-  - Steppers: `stepsInMinus`/`stepsInPlus`, `lenInMinus`/`lenInPlus`, `delayInMinus`/`delayInPlus`, `dbMinMinus`/`dbMinPlus`, `dbMaxMinus`/`dbMaxPlus`
+  - Numeric inputs: `dbStepIn`, `lenIn`, `delayIn`, `dbMinIn`, `dbMaxIn`
+  - Steppers: `dbStepMinus`/`dbStepPlus`, `lenInMinus`/`lenInPlus`, `delayInMinus`/`delayInPlus`, `dbMinMinus`/`dbMinPlus`, `dbMaxMinus`/`dbMaxPlus`
   - Frequency mode: `fm` radio group, `customFreq`, `applyFreq`
   - Matrices: `matrix-L`, `matrix-R`
   - Charts: `chartL`, `chartR`
   - Status: `status`
-  - Clipboard: `copyBtn`, `clipDump`
+  - Footer: `resetBtn`, `copyBtn`, `clipDump`
 - Radio `name` format: `vol-{ch}-{col}` where `ch` is `left` or `right` and `col` is the frequency index.
 - Radio `id` format: `rad-{ch}-{col}-{row}`.
-- Tone button `data-*` attributes: `data-ch`, `data-col`, `data-row`.
-- Clipboard/`#clipDump` format: pretty-printed JSON (2-space indent) with keys `steps`, `sequenceLengthSec`, `delayBetweenBeepsSec`, and `channels` = `{left:[{freqHz,volumePct,volumeDb}...], right:[...]}` (freqs low→high, built from `state.freqs`/`state.vols`; `volumeDb` is the dB-ladder value for that row).
-- Volume row r (0 = top):
-  - **Percent (display-only)**: `(S - r) * 100 / S` → 100% top … 5% bottom (S=20).
-  - **dB (playback ladder)**: `dbMax + r * (dbMin − dbMax) / (S − 1)` dB, gain `10^(db/20)` → `state.dbMax` top … `state.dbMin` bottom (defaults: −20.0 dB top … −80.0 dB bottom, S=20, ≈ 3.16 dB per row). `dbMin`/`dbMax` are the user-set Min dB / Max dB inputs (library bounds −1000…0 dB, cross-clamped so `dbMin ≤ dbMax`). This is the actual gain the audio engine applies. The percent row stays display-only and row-position based.
+- Matrix cells contain a radio only — **no tone buttons**; the row/column/channel of a clicked cell come from the radio `id` inside the cell. The playing cell gets the `active` class (`td.cell.active`, background `#f7b7b7`).
+- Clipboard/`#clipDump` format: pretty-printed JSON (2-space indent) with keys `dbStep`, `dbMin`, `dbMax`, `sequenceLengthSec`, `delayBetweenBeepsSec`, and `channels` = `{left:[{freqHz,volumeDb}...], right:[...]}` (freqs low→high, built from `state.freqs`/`state.vols`; `volumeDb` is the dB value the row plays at). The row count is intentionally omitted — it is derivable from `dbStep`/`dbMin`/`dbMax`.
+- Volume row r (0 = top): `rowDbValue(r) = dbMax − r·dbStep` dB, gain `10^(db/20)` → `state.dbMax` top, each row `dbStep` dB quieter, bottom row (S−1) = `dbMax − (S−1)·dbStep` (defaults: −20.0 dB top … −80.0 dB bottom, 31 rows, 2 dB per row). `dbStep`/`dbMin`/`dbMax` are the user-set dB step / Min dB / Max dB inputs (ladder bounds −1000…0 dB for Min/Max, 0.1–10 for the step, cross-clamped so `dbMin ≤ dbMax`). The default checked row is the nearest ladder midpoint (−50.0 dB at row 10 of 31 with the defaults).

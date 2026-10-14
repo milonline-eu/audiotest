@@ -32,7 +32,7 @@ Zero dB Hero is a single-page web app that plays left/right sine tones from a fr
 - **`state` object** (global, declared in `state.js`):
   - `freqs: number[]` — current frequency list in Hz (low→high).
   - `steps: number` — derived row count; recomputed from `dbStep`/`dbMin`/`dbMax` via `rowCount()`, never user-set.
-  - `seqLen: number` — total sequence length in seconds (0.5–60); default 2.
+  - `seqLen: number` — total sequence length in seconds (0.5–60); default 1.
   - `delay: number` — inter-beep delay in seconds (0–30); default 0.1.
   - `dbStep: number` — dB difference between adjacent rows (0.1–10); default 2.
   - `dbMin: number` — dB of the BOTTOM row (quietest / most negative); default −80.

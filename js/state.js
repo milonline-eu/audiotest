@@ -5,7 +5,7 @@
 var state = {
   freqs: [],
   steps: 0, // derived row count; recomputed from the dB ladder, never user-set
-  seqLen: 2,
+  seqLen: 1,
   delay: 0.1,
   dbStep: 2, // dB difference between adjacent rows (input range 0.1-10)
   dbMin: -80, // dB of the BOTTOM row (quietest / most negative)

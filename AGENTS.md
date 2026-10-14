@@ -4,7 +4,7 @@
 
 The Audio Tone Matrix is a single-page web app that plays left/right sine tones from a frequency×dB-step matrix. Each channel has a matrix where columns are frequencies (bare numbers, no `Hz` suffix) and rows are the dB ladder: the top row plays at **Max dB** (default −20) and each row is **dB step** (default 2 dB) quieter. The row count is derived, not set: `round((dbMax − dbMin) / dbStep) + 1` → 31 rows with the defaults (−20.0 dB top … −80.0 dB bottom). Each cell holds a **radio only** (sets that frequency's row for that channel); clicking the cell plays that (channel, frequency, row) at that row's dB gain for the configured sequence length with inter-beep delay, and the cell is highlighted while the tone plays. Two canvas charts show the dB volume per frequency for each channel (y-axis in dB, auto-scaled). A status line shows `idle` or `playing freq=XHz vol=Y dB ch=left|right remaining: Zs`. A clipboard copy button writes all current (channel, frequency, volume) values as dB-only JSON.
 
-**Settings lock**: once any value has been set in any selector (a settings input change/stepper/Enter, a frequency-mode change or apply, a matrix radio change, or a cell click), the **dB step / Min dB / Max dB inputs (incl. their −/+ steppers) and the frequency controls become disabled**. The footer **Reset** button re-enables them. Sequence length, delay, and the matrices stay operable while locked. Reset only re-enables controls — it restores no values and stops no playing tone.
+**Settings lock**: once any value has been set in the **matrix selectors** (a matrix radio change or a cell click), the **dB step / Min dB / Max dB inputs (incl. their −/+ steppers) and the frequency controls become disabled**. Changing settings inputs or the frequency mode does **not** lock — only matrix selection locks. The footer **Reset** button re-enables them. Sequence length, delay, and the matrices stay operable while locked. Reset only re-enables controls — it restores no values and stops no playing tone.
 
 **Volume model** — a single dB ladder, no percent:
 - Row r (0 = top) plays at `dbMax − r * dbStep` dB (`rowDbValue(r)`). Top row = `state.dbMax`, each row `state.dbStep` dB quieter; bottom row (S−1) = `dbMax − (S−1)·dbStep` (≥ `dbMin`; when `dbStep` doesn't divide the span, the bottom row sits one step above `dbMin`). Gain = `10^(db/20)` — the actual gain the audio engine applies.
@@ -47,6 +47,7 @@ The Audio Tone Matrix is a single-page web app that plays left/right sine tones 
 - **Layout** (HTML in `index.html`, CSS in `css/styles.css`):
   - `#channels` is a CSS grid of two columns; each `.channel` has its chart (`#chartL`/`#chartR`) above its matrix (`#matrix-L`/`#matrix-R`).
   - `#status` is a `<div>` with `position: fixed; bottom: 0` so it is always visible while scrolling.
+  - Matrix cells are compact (sized to their radio: ~20×20 px) and frequency column headers are vertical (`writing-mode: vertical-rl`) so 4-digit values fit in the narrow columns.
 - **Rendering functions** (in `js/render.js`):
   - `renderChannel(ch)` — builds the HTML table for the left or right matrix. Column headers are **bare frequency numbers** (no `Hz` suffix). Each cell (`.cell`) holds **only a radio** (`value` = the row's dB string); clicking the cell plays (delegated `click` in `attachListeners`). The row label in the leftmost column is a single dB line (e.g. `−50.0 dB`) — the only volume text in the matrix. Called on frequency/ladder change. Resets all radios to unselected, then checks the midpoint-row radio per frequency column.
   - `renderCharts()` — draws both canvas charts: a `#555` line + red × markers, `#999` axes/gridlines, and x-axis frequency labels rotated 45° so long lists never overlap. Y-axis is **dB, auto-scaled to the data** (no fixed min/max/stepSize). Called on radio change, on re-render, and on debounced window resize.
@@ -61,7 +62,7 @@ The Audio Tone Matrix is a single-page web app that plays left/right sine tones 
   - `stopCurrent()` — stops the current tone, clears timers, removes the `active` class from the cell, resets `state.playing` to null, sets status to `idle`.
   - `toggleCell(cell)` — if `cell === state.playing.cellEl`, calls `stopCurrent()`; otherwise calls `startTone()` for the cell's (channel, column, row).
 - **Settings lock** (in `js/main.js`):
-  - `setLocked(on)` — disables/enables the locked controls: `dbStepIn`/`dbStepMinus`/`dbStepPlus`, `dbMinIn`/`dbMinMinus`/`dbMinPlus`, `dbMaxIn`/`dbMaxMinus`/`dbMaxPlus`, the `fm` frequency-mode radios, `customFreq`, `applyFreq`. Called `setLocked(true)` from every committed value-set path (settings change/stepper/Enter, `applyFrequencies`, matrix radio `change`, cell `click`). Called `setLocked(false)` by the footer **Reset** button; unlocking re-applies the custom-mode rule (`customFreq`/`applyFreq` disabled unless the mode is Custom). Sequence length, delay, and the matrices are never locked.
+  - `setLocked(on)` — disables/enables the locked controls: `dbStepIn`/`dbStepMinus`/`dbStepPlus`, `dbMinIn`/`dbMinMinus`/`dbMinPlus`, `dbMaxIn`/`dbMaxMinus`/`dbMaxPlus`, the `fm` frequency-mode radios, `customFreq`, `applyFreq`. Called `setLocked(true)` from the **matrix selectors only** (matrix radio `change`, cell `click`, in `js/render.js`); changing settings inputs or the frequency mode does **not** lock. Called `setLocked(false)` by the footer **Reset** button; unlocking re-applies the custom-mode rule (`customFreq`/`applyFreq` disabled unless the mode is Custom). Sequence length, delay, and the matrices are never locked.
 
 ## How to extend
 
@@ -79,9 +80,9 @@ No automated test suite exists. Verification is manual:
 4. Click a second cell while the first is playing — verify the first stops (exclusive) and the second starts and is highlighted.
 5. Click the active (highlighted) cell again — verify it stops immediately and the highlight is removed.
 6. Press Escape — verify the current tone stops.
-7. Change a radio button — verify the chart updates.
+7. Change a matrix radio — verify the chart updates and the settings controls lock.
 8. Click "Copy values" — verify the clipboard contains pretty-printed JSON with keys `dbStep`, `dbMin`, `dbMax`, `sequenceLengthSec`, `delayBetweenBeepsSec`, and a `channels.left`/`channels.right` array of `{"freqHz":N,"volumeDb":D}` objects (no `volumePct`).
-9. Set any value (e.g. click a cell or a radio) — verify the dB step / Min dB / Max dB inputs (incl. steppers) and the frequency controls become disabled; click **Reset** → they re-enable (Apply frequencies stays disabled unless the mode is Custom).
+9. Select a matrix value (click a cell or a matrix radio — but not a settings input or frequency-mode change) — verify the dB step / Min dB / Max dB inputs (incl. steppers) and the frequency controls become disabled; click **Reset** → they re-enable (Apply frequencies stays disabled unless the mode is Custom).
 10. Toggle between Preset A (15 tones), Preset B (19 tones, the default), and Custom frequencies — verify the matrices and charts update.
 11. Use the steppers to change dB step, Min/Max dB, sequence length, and delay — verify the input values and behavior update correctly (ladder changes re-render the matrices with the derived row count and stop any playing tone).
 

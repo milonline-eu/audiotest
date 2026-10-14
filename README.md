@@ -21,7 +21,7 @@ No server is required.
 | **Delay between beeps (s)** (numeric input with −/+ steppers) | When > 0, the tone plays in on/off blips of this duration (50% on, 50% off). Applied immediately. |
 | **Frequency mode** (Preset A / Preset B / Custom radio buttons) | Preset A = 15-tone IEC set, Preset B = 19-tone IEC set (the default). Custom enables the text field below. |
 | **Custom** text field | Comma- or space-separated list of frequencies in Hz. Click **Apply frequencies** (or press Enter) to use them. |
-| **Reset** button | Re-enables the dB step / Min dB / Max dB inputs and the frequency controls once they have locked. Locking happens automatically as soon as any value is set in any selector (settings inputs, frequency mode, a matrix radio, or clicking a cell). |
+| **Reset** button | Re-enables the dB step / Min dB / Max dB inputs and the frequency controls once they have locked. Locking happens automatically the first time a value is set in the **matrix selectors** — a matrix radio change or a cell click. Changing the settings inputs or frequency mode does not lock. |
 | **Copy values** button | Copies all current channel/frequency/volume settings to the clipboard. |
 
 ## Layout
@@ -33,6 +33,7 @@ The page is split into two side-by-side columns, one per channel. In each column
 Each matrix has frequencies as columns (low → high, left to right) and the dB ladder as rows. Volume is a single dB ladder: the top row plays at **Max dB**, each row is **dB step** dB quieter, and the bottom row is `Max − (rows−1)·step` (with the defaults: −20.0 top … −80.0 bottom, 2 dB per row).
 - The row label in the left column of each matrix is a single dB line (e.g. `−50.0 dB`). Column headers are bare numbers (e.g. `125`, no `Hz`).
 - Each cell holds **only a radio** selector. Clicking the cell plays that (channel, frequency, row) at that row's dB gain for the configured sequence length, with the chosen inter-beep delay; the clicked cell's radio is checked automatically.
+- Cells are compact — sized to their radio (~20×20 px) — and frequency column headers are written vertically so long (4-digit) values fit in the narrow columns.
 - The cell of the currently playing tone is **highlighted** (light red).
 - Only **one tone plays at a time** (exclusive). Clicking another cell stops the previous one.
 - Clicking the **active** (highlighted) cell again stops the tone immediately.

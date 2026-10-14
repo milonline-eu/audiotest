@@ -65,7 +65,7 @@ function startTone(ch, col, cellEl, rowDbStr) {
   // Gain from the dB ladder: the row plays at rowDbValue(row) dB
   // (dbMax top, dbStep dB per row), gain 10^(db/20).
   var rowMatch = /^rad-(left|right)-\d+-(\d+)$/.exec(cellEl.querySelector('input[type=radio]').id);
-  var row = rowMatch ? Number(rowMatch[1]) : 0;
+  var row = rowMatch ? Number(rowMatch[2]) : 0;
   var vol = Math.pow(10, rowDbValue(row) / 20);
   var L = Math.max(0, state.seqLen);
   var D = Math.max(0, state.delay);

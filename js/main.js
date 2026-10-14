@@ -109,7 +109,6 @@ function applyFrequencies() {
   renderChannel('right');
   renderCharts();
   updateClipDump();
-  setLocked(true);
 }
 
 // ----- stepper + input handlers -----
@@ -120,7 +119,6 @@ function onDbStepChange() {
   var dbStepIn = document.getElementById('dbStepIn');
   state.dbStep = syncFromInput(dbStepIn, 0.1, 10);
   state.steps = rowCount();
-  setLocked(true);
   stopCurrent();
   renderChannel('left');
   renderChannel('right');
@@ -134,7 +132,6 @@ function onDbStepStepper(dir) {
 // lenIn: immediate only, no re-render.
 function onLenChange() {
   var lenIn = document.getElementById('lenIn');
-  setLocked(true);
   state.seqLen = syncFromInput(lenIn, 0.5, 60);
 }
 function onLenStepper(dir) {
@@ -145,7 +142,6 @@ function onLenStepper(dir) {
 // delayIn: immediate only, no re-render.
 function onDelayChange() {
   var delayIn = document.getElementById('delayIn');
-  setLocked(true);
   state.delay = syncFromInput(delayIn, 0, 30);
 }
 function onDelayStepper(dir) {
@@ -161,7 +157,6 @@ function onDbMinChange() {
   var hi = Number(dbMaxIn.value); if (!isFinite(hi)) hi = state.dbMax;
   var v = syncFromInput(dbMinIn, DB_LIB_MIN, hi);   // cross-clamp so dbMin <= dbMax
   state.dbMin = v;
-  setLocked(true);
   state.steps = rowCount();
   stopCurrent();
   renderChannel('left');
@@ -175,7 +170,6 @@ function onDbMaxChange() {
   var lo = Number(dbMinIn.value); if (!isFinite(lo)) lo = state.dbMin;
   var v = syncFromInput(dbMaxIn, lo, DB_LIB_MAX);   // cross-clamp so dbMax >= dbMin
   state.dbMax = v;
-  setLocked(true);
   state.steps = rowCount();
   stopCurrent();
   renderChannel('left');

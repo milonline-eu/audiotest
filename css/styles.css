@@ -76,14 +76,21 @@ button:disabled { opacity: .5; cursor: default; }
 
 /* Matrix: row labels on the left; a radio only in each cell. Clicking a cell
    plays the tone for that (channel, frequency, row). */
-.matrix-scroll table { border-collapse: collapse; table-layout: fixed; }
+.matrix-scroll table { border-collapse: collapse; }
 .matrix-scroll th {
   font-size: 11px; text-align: center;
   border: 1px solid #ccc; padding: 4px 2px; background: #f2f2f2;
 }
+/* Frequency column headers run vertically so 4-digit values fit in a
+   narrow column. */
+.matrix-scroll th:not(.rowlabel) {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  padding: 6px 2px;
+}
 .matrix-scroll td {
   border: 1px solid #ccc; padding: 3px;
-  min-width: 66px; vertical-align: middle;
+  vertical-align: middle;
   font-size: 11px;
 }
 .matrix-scroll td.rowlabel {

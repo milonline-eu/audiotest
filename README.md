@@ -1,4 +1,4 @@
-# Audio Tone Matrix
+# Zero dB Hero
 
 ## What it is
 

@@ -56,8 +56,8 @@ Clicking **Copy values** writes the current settings to the clipboard as pretty-
   "dbStep": 2,
   "dbMin": -80,
   "dbMax": -20,
-  "sequenceLengthSec": 5,
-  "delayBetweenBeepsSec": 0.2,
+  "sequenceLengthSec": 2,
+  "delayBetweenBeepsSec": 0.1,
   "channels": {
     "left": [
       { "freqHz": 125, "volumeDb": -50 },
@@ -77,8 +77,8 @@ The last copied text is shown in the small preview area at the bottom of the pag
 ## Defaults
 
 - dB step 2 dB, Min dB −80 / Max dB −20 → 31 rows (−20.0 top … −80.0 bottom)
-- 5 s sequence length
-- 0.2 s delay (blips: on 0.2 s / off 0.2 s, truncated to sequence length)
+- 2 s sequence length
+- 0.1 s delay (blips: on 0.1 s / off 0.1 s, truncated to sequence length)
 - Preset B frequencies (19 tones)
 - default volume per frequency = ladder midpoint (−50.0 dB with the defaults)
 

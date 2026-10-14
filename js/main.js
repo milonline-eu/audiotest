@@ -285,8 +285,8 @@ function wire() {
 
 function startup() {
   state.dbStep = 2;
-  state.seqLen = 5;
-  state.delay = 0.2;
+  state.seqLen = 2;
+  state.delay = 0.1;
   state.dbMin = -80;
   state.dbMax = -20;
   state.steps = rowCount();

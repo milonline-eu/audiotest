@@ -1,0 +1,119 @@
+/* Audio Tone Matrix styles */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  color: #222;
+  background: #f5f5f2;
+  padding: 12px 12px 60px; /* reserve space for the fixed status bar */
+}
+header h1 { font-size: 20px; padding-bottom: 8px; }
+
+/* Status bar: fixed to the bottom edge so it is always visible when scrolling. */
+#status {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  font-family: monospace; font-size: 12px;
+  background: #e8ecf5; border-top: 1px solid #b7c0d8;
+  padding: 6px 12px; text-align: center;
+  z-index: 50;
+}
+
+/* Settings row */
+#settings {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  align-items: center;
+  background: #fff; border: 1px solid #ddd; border-radius: 6px;
+  padding: 8px 10px; margin-bottom: 10px;
+}
+#settings label { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+#settings input[type=number] { width: 56px; font-family: monospace; }
+#customFreq { width: 190px; font-family: monospace; font-size: 11px; }
+#customFreq[disabled] { opacity: .55; background: #eee; }
+/* Frequency mode block sits on its own line, below the Volume steps label. */
+#settings .freq-mode {
+  width: 100%;
+  justify-content: flex-start;
+  border-top: 1px dashed #ddd;
+  padding-top: 4px;
+  margin-top: 2px;
+}
+
+button {
+  font: inherit; cursor: pointer;
+  border: 1px solid #999; border-radius: 4px;
+  background: #fff; padding: 4px 8px;
+}
+button:hover { background: #f0f0f0; }
+button:disabled { opacity: .5; cursor: default; }
+.stepper {
+  width: 18px; height: 18px; padding: 0;
+  font-size: 12px; font-weight: bold; line-height: 1;
+  flex: 0 0 auto;
+}
+
+/* Layout: single column — Left channel on top, Right channel below, each narrow. */
+#channels {
+  display: grid; grid-template-columns: 1fr; gap: 12px;
+}
+.channel {
+  background: #fff; border: 1px solid #ccc; border-radius: 6px;
+  padding: 10px; display: flex; flex-direction: column; gap: 8px;
+  min-width: 0;
+}
+.channel h2 { font-size: 14px; }
+
+/* Chart.js responsive wrapper: full width, fixed 300px height. The canvas
+   inside fills it; Chart.js sizes itself to the wrapper when responsive is on. */
+.channel .chart-wrap { position: relative; width: 100%; height: 300px; }
+.channel canvas { display: block; width: 100%; height: 100%; }
+.matrix-scroll {
+  overflow: auto;
+  border: 1px solid #e0e0e0; border-radius: 4px;
+  background: #fafafa; padding: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Matrix: row labels on the left; visible radio + tone button in each cell.
+   Volume values are shown only by the row labels on the left (not per cell). */
+.matrix-scroll table { border-collapse: collapse; table-layout: fixed; }
+.matrix-scroll th {
+  font-size: 11px; text-align: center;
+  border: 1px solid #ccc; padding: 4px 2px; background: #f2f2f2;
+}
+.matrix-scroll td {
+  border: 1px solid #ccc; padding: 3px;
+  min-width: 66px; vertical-align: middle;
+  font-size: 11px;
+}
+.matrix-scroll td.rowlabel {
+  min-width: 50px; text-align: center;
+  font-family: monospace; font-size: 11px;
+}
+/* Each cell: radio on the left, tone button filling the rest. */
+.matrix-scroll input[type=radio] {
+  display: inline-block;
+  width: 14px; height: 14px;
+  margin: 0; flex: 0 0 auto;
+}
+.matrix-scroll .tone {
+  flex: 1; height: 20px; min-width: 28px;
+  border: 1px solid #999; border-radius: 3px;
+  background: #fff; font-size: 0; cursor: pointer; padding: 0;
+}
+.matrix-scroll .tone:hover { background: #f2f2f2; }
+.matrix-scroll .tone.active { border-color: #d63333; background: #f7b7b7; }
+
+/* Footer: copy button + clipboard preview. */
+footer {
+  margin-top: 12px; display: flex; align-items: flex-start; gap: 16px;
+  background: #fff; border: 1px solid #ddd; border-radius: 6px;
+  padding: 8px 10px;
+}
+footer pre {
+  font: 11px/1.35 monospace;
+  width: 100%; max-width: 100%;
+  overflow: auto; white-space: pre-wrap;
+  background: #fafafa; border: 1px solid #ccc; border-radius: 4px;
+  padding: 4px;
+}

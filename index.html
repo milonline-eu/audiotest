@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Audio Tone Matrix</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header>
+    <h1>Audio Tone Matrix</h1>
+  </header>
+
+  <section id="settings">
+    <label>
+      Volume steps
+      <button type="button" class="stepper" id="stepsInMinus" aria-label="decrease steps">&minus;</button>
+      <input type="number" id="stepsIn" min="1" max="50" value="20">
+      <button type="button" class="stepper" id="stepsInPlus" aria-label="increase steps">+</button>
+    </label>
+    <label class="freq-mode">
+      Frequency mode
+      <span>
+        <input type="radio" name="fm" value="A" checked> Preset A
+        <input type="radio" name="fm" value="B"> Preset B
+        <input type="radio" name="fm" value="C"> Custom
+        <input type="text" id="customFreq" disabled placeholder="e.g. 40 100 200 400, 600 1200">
+        <button id="applyFreq">Apply frequencies</button>
+      </span>
+    </label>
+    <label>
+      Sequence length (s)
+      <button type="button" class="stepper" id="lenInMinus" aria-label="decrease sequence length">&minus;</button>
+      <input type="number" id="lenIn" min="0.5" max="60" step="0.1" value="5">
+      <button type="button" class="stepper" id="lenInPlus" aria-label="increase sequence length">+</button>
+    </label>
+    <label>
+      Delay between beeps (s)
+      <button type="button" class="stepper" id="delayInMinus" aria-label="decrease delay">&minus;</button>
+      <input type="number" id="delayIn" min="0" max="30" step="0.1" value="0.2">
+      <button type="button" class="stepper" id="delayInPlus" aria-label="increase delay">+</button>
+    </label>
+  </section>
+
+  <section id="channels">
+    <section class="channel">
+      <h2>Left</h2>
+      <div class="chart-wrap"><canvas id="chartL" width="260" height="300"></canvas></div>
+      <div id="matrix-L" class="matrix-scroll"></div>
+    </section>
+    <section class="channel">
+      <h2>Right</h2>
+      <div class="chart-wrap"><canvas id="chartR" width="260" height="300"></canvas></div>
+      <div id="matrix-R" class="matrix-scroll"></div>
+    </section>
+  </section>
+
+  <footer>
+    <button id="copyBtn">Copy values</button>
+    <pre id="clipDump"></pre>
+  </footer>
+
+  <!-- Status bar: pinned to the bottom edge, always visible when scrolling. -->
+  <div id="status">idle</div>
+
+  <script src="lib/Tone.js"></script>
+  <script src="lib/chart.js.min.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/presets.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

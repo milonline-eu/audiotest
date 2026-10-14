@@ -5,7 +5,7 @@
 //   presets.js: PRESET_A, PRESET_B, presetFor(mode), parseCustomFrequencies(text)
 //   audio.js:   startTone, stopCurrent, toggleCell
 //   render.js:  renderChannel, attachListeners, renderCharts, setStatus,
-//              copyValues, updateClipDump, saveClipJSON, defaultMidRow
+//              copyValues, updateClipDump, saveClipJSON
 
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
@@ -19,11 +19,11 @@ function rowCount() {
 // "Library allows" bounds for the dB ladder inputs (Tone.js dbToGain has no
 // built-in clamp): quietest meaningful floor and unity-gain ceiling.
 var DB_LIB_MIN = -1000;
-var DB_LIB_MAX = 0;
-
-// Settings lock: once any value is set in any selector, the dB ladder inputs
-// (step/Min/Max) and the frequency controls become read-only. Reset unlocks.
-// Sequence length, delay, and the matrices stay operable while locked.
+// Settings lock: once a value is set in the MATRIX selectors (a matrix radio
+// change or a cell click), the dB ladder inputs (step/Min/Max) and the
+// frequency controls become read-only. Reset unlocks. Changing the settings
+// inputs or the frequency mode does NOT lock. Sequence length, delay, and the
+// matrices stay operable while locked.
 var locked = false;
 function lockedControls() {
   var ids = ['dbStepIn', 'dbStepMinus', 'dbStepPlus', 'dbMinIn', 'dbMinMinus',
@@ -87,6 +87,13 @@ function syncFromInput(input, lo, hi) {
 
 // ----- frequency handling -----
 
+// A new frequency set means nothing has been tested yet: clear the per-column
+// tested flags so every column starts untested (yellow, no selection).
+function resetTouched() {
+  var n = state.freqs.length;
+  state.touched.left = new Array(n).fill(false);
+  state.touched.right = new Array(n).fill(false);
+}
 function applyFrequencies() {
   var mode = currentMode();
   var customFreq = document.getElementById('customFreq');
@@ -104,11 +111,106 @@ function applyFrequencies() {
     newFreqs = presetFor(mode);
   }
   state.freqs = newFreqs;
+  resetTouched();
   stopCurrent();
   renderChannel('left');
   renderChannel('right');
   renderCharts();
   updateClipDump();
+}
+
+// Load settings from a settings JSON (a file, or the pasted/edited text in
+// the clipDump textarea) into state, the settings inputs, the frequency set,
+// the matrices, and the charts. Invalid text -> a status message, nothing
+// applied. Values that do not sit on the reconstructed ladder revert to
+// untested (handled by renderChannel's rowForDb snapping).
+function loadClipJSON(text) {
+  var data;
+  try { data = JSON.parse(text); }
+  catch (e) { setStatus('load failed — not valid JSON'); return; }
+  if (!data || typeof data !== 'object') { setStatus('load failed — not valid JSON'); return; }
+
+  var dbStep = Number(data.dbStep);
+  var dbMin = Number(data.dbMin);
+  var dbMax = Number(data.dbMax);
+  var seqLen = Number(data.sequenceLengthSec);
+  var delay = Number(data.delayBetweenBeepsSec);
+
+  var chans = data.channels || {};
+  var left = Array.isArray(chans.left) ? chans.left : null;
+  var right = Array.isArray(chans.right) ? chans.right : null;
+  var ref = (left && left.length) ? left : right;
+  if (!ref || !ref.length) { setStatus('load failed — no channels in JSON'); return; }
+
+  var newFreqs = [];
+  for (var i = 0; i < ref.length; i++) {
+    var f = Number(ref[i] && ref[i].freqHz);
+    if (!isFinite(f)) { setStatus('load failed — bad freqHz'); return; }
+    newFreqs.push(f);
+  }
+
+  setLocked(false);
+  stopCurrent();
+
+  dbStep = isFinite(dbStep) ? clamp(dbStep, 0.1, 10) : state.dbStep;
+  dbMin = isFinite(dbMin) ? clamp(dbMin, DB_LIB_MIN, 0) : state.dbMin;
+  dbMax = isFinite(dbMax) ? clamp(dbMax, DB_LIB_MIN, 0) : state.dbMax;
+  if (dbMin > dbMax) { var tmp = dbMin; dbMin = dbMax; dbMax = tmp; }
+  state.dbStep = dbStep; state.dbMin = dbMin; state.dbMax = dbMax;
+  state.steps = rowCount();
+  document.getElementById('dbStepIn').value = dbStep;
+  document.getElementById('dbMinIn').value = dbMin;
+  document.getElementById('dbMaxIn').value = dbMax;
+
+  seqLen = isFinite(seqLen) ? clamp(seqLen, 0.5, 60) : state.seqLen;
+  delay = isFinite(delay) ? clamp(delay, 0, 30) : state.delay;
+  state.seqLen = seqLen; state.delay = delay;
+  document.getElementById('lenIn').value = seqLen;
+  document.getElementById('delayIn').value = delay;
+
+  // Frequencies -> Custom mode with the loaded list in the field.
+  state.freqs = newFreqs.slice();
+  var customRadio = document.querySelector('input[name=fm][value=C]');
+  if (customRadio) customRadio.checked = true;
+  document.getElementById('customFreq').value = newFreqs.join(', ');
+
+  // Per-channel volumes + tested flags (raw dB; renderChannel snaps onto the
+  // ladder and reverts non-ladder values to untested).
+  ['left', 'right'].forEach(function (ch) {
+    var arr = (ch === 'left' ? left : right) || [];
+    var vols = new Array(newFreqs.length).fill(null);
+    var touched = new Array(newFreqs.length).fill(false);
+    for (var j = 0; j < newFreqs.length; j++) {
+      var v = (arr[j] && arr[j].volumeDb != null) ? Number(arr[j].volumeDb) : null;
+      if (v !== null && isFinite(v)) { vols[j] = v; touched[j] = true; }
+    }
+    state.vols[ch] = vols;
+    state.touched[ch] = touched;
+  });
+
+  renderChannel('left');
+  renderChannel('right');
+  renderCharts();
+  updateClipDump();
+
+  var anyTouched = state.touched.left.some(Boolean) || state.touched.right.some(Boolean);
+  setLocked(anyTouched);
+  if (!anyTouched) {
+    // Loaded into Custom mode with nothing selected: the setLocked(false)
+    // unlock branch above ran while the mode radio still pointed at the old
+    // mode, so re-enable the custom controls here.
+    document.getElementById('customFreq').disabled = false;
+    document.getElementById('applyFreq').disabled = false;
+  }
+  setStatus('loaded ' + newFreqs.length + ' frequencies');
+}
+
+// Load from a file picked by the Load button.
+function loadFromFile(file) {
+  var reader = new FileReader();
+  reader.onload = function () { loadClipJSON(String(reader.result)); };
+  reader.onerror = function () { setStatus('load failed — could not read file'); };
+  reader.readAsText(file);
 }
 
 // ----- stepper + input handlers -----
@@ -278,6 +380,25 @@ function wire() {
     if (e.key === 'Escape') stopCurrent();
   });
 
+
+  // Load: pick a settings JSON file, or paste/edit JSON into the clipDump
+  // textarea — both drive the same loadClipJSON() path.
+  var loadBtn = document.getElementById('loadBtn');
+  var fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = '.json,application/json';
+  fileInput.style.display = 'none';
+  document.body.appendChild(fileInput);
+  loadBtn.addEventListener('click', function () { fileInput.click(); });
+  fileInput.addEventListener('change', function () {
+    if (fileInput.files && fileInput.files[0]) loadFromFile(fileInput.files[0]);
+    fileInput.value = ''; // allow re-selecting the same file
+  });
+  var clipDump = document.getElementById('clipDump');
+  clipDump.addEventListener('change', function () { loadClipJSON(clipDump.value); });
+  clipDump.addEventListener('paste', function () {
+    setTimeout(function () { loadClipJSON(clipDump.value); }, 0);
+  });
   // Matrix listeners (attach once; renderChannel does not re-add them).
   attachListeners();
 }

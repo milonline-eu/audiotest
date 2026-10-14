@@ -24,10 +24,11 @@ No server is required.
 | **Reset** button | Re-enables the dB step / Min dB / Max dB inputs and the frequency controls once they have locked. Locking happens automatically the first time a value is set in the **matrix selectors** — a matrix radio change or a cell click. Changing the settings inputs or frequency mode does not lock. |
 | **Copy to clipboard** button | Copies all current channel/frequency/volume settings (with a capture timestamp) to the clipboard. |
 | **Save** button | Downloads the same JSON as a `zero-db-hero-<localTimestamp>.json` file. |
+| **Load** button | Loads a settings JSON file (same shape as the clipboard JSON) into the app: the ladder/sequence settings, the frequency list (into Custom mode, with the list in the Custom field), and the per-column tested values. Values that do not sit on the reconstructed ladder revert to untested; invalid JSON shows a status message and changes nothing. |
 
 ## Layout
 
-The page is split into two side-by-side columns, one per channel. In each column the chart sits directly above its tone matrix (left chart over the left matrix, right chart over the right matrix). A thin status bar is pinned to the very bottom of the viewport so it is always visible, even while scrolling.
+The page is one column: the **Left** section (chart above its tone matrix), then the **Right** section (chart above its tone matrix), then a **Combined** section with a single chart that plots both channels plus a reference target shape. A thin status bar is pinned to the very bottom of the viewport so it is always visible, even while scrolling.
 
 ## Matrix
 
@@ -36,25 +37,26 @@ Each matrix has frequencies as columns (low → high, left to right) and the dB 
 - Each cell holds **only a radio** selector. Clicking the cell plays that (channel, frequency, row) at that row's dB gain for the configured sequence length, with the chosen inter-beep delay; the clicked cell's radio is checked automatically.
 - Cells are compact — sized to their radio (~20×20 px) — and frequency column headers are written vertically so long (4-digit) values fit in the narrow columns.
 - The cell of the currently playing tone is **highlighted** (light red).
+- Columns you have not picked a value for yet are **untested**: no radio is checked, the column's cells are highlighted **yellow**, and the column's volume is `null` in the charts and JSON. The highlight is removed from the whole column on the first selection (cell click or radio change).
 - Only **one tone plays at a time** (exclusive). Clicking another cell stops the previous one.
 - Clicking the **active** (highlighted) cell again stops the tone immediately.
 - Pressing **Escape** also stops the current tone.
-- The default checked row per column is the one nearest the ladder midpoint (−50.0 dB with the defaults).
+- There is **no default selection** — every column starts untested (yellow, `null`) until you pick a value.
 
 ## Charts
 
 - **X-axis**: frequencies, low → high, plotted by index (not by Hz value). Labels are rotated so long lists never overlap.
-- **Y-axis**: dB volume, auto-scaled to the data (default −80…−20 range).
+- **Y-axis**: dB volume, auto-scaled to the data.
 - **Data line**: a grey line connecting the volume of each frequency.
 - **Markers**: a red × at each point (one per frequency).
+- **Combined chart** (third section): both channels on one canvas — **left** in blue (`#3366cc`), **right** in red (`#d63333`) — plus a black dashed **target shape**: a fixed 10-point reference curve (−20 dB at 125 Hz, rising to 0 dB at 1500–3000 Hz, back to −20 dB at 8000 Hz) resampled onto the current frequencies on a log-frequency scale, shifted vertically so its average matches the average of the tested left/right values (no shift while nothing is tested). Untested frequencies are gaps.
 
 ## Clipboard
 
-Clicking **Copy values** writes the current settings to the clipboard as pretty-printed JSON:
+Clicking **Copy to clipboard** writes the current settings to the clipboard as pretty-printed JSON:
 
 ```json
 {
-  "timestamp": "2026-10-14T12:34:56.789Z",
   "timestamp": "2026-10-14T12:34:56.789Z",
   "localTimestamp": "2026-10-14T14:34:56.789",
   "dbStep": 2,
@@ -64,19 +66,18 @@ Clicking **Copy values** writes the current settings to the clipboard as pretty-
   "delayBetweenBeepsSec": 0.1,
   "channels": {
     "left": [
-      { "freqHz": 125, "volumeDb": -50 },
-      { "freqHz": 160, "volumeDb": -50 }
+      { "freqHz": 125, "volumeDb": -46 },
+      { "freqHz": 160, "volumeDb": null }
     ],
     "right": [
-      { "freqHz": 125, "volumeDb": -50 }
+      { "freqHz": 125, "volumeDb": null }
     ]
   }
 }
 ```
+`timestamp` is the capture time (ISO 8601, UTC) of the moment the JSON was generated. `volumeDb` is the dB value the row plays at (`rowDbValue(r) = dbMax − r·dbStep`), or `null` while the column is untested (no selection yet). The row count is not included — it is derivable from `dbStep`/`dbMin`/`dbMax`.
 
-`timestamp` is the capture time (ISO 8601, UTC) of the moment the JSON was generated. `volumeDb` is the dB value the row plays at (`rowDbValue(r) = dbMax − r·dbStep`; the default row is the ladder midpoint ≈ −50.0 dB with the defaults). The row count is not included — it is derivable from `dbStep`/`dbMin`/`dbMax`.
-
-The last copied text is shown in full in the scrollable text area at the bottom of the page.
+The last copied text is shown in full in the scrollable text area at the bottom of the page. The text area is also editable: paste or edit settings JSON there and it is loaded the same way as the **Load** button.
 
 ## Defaults
 
@@ -84,7 +85,7 @@ The last copied text is shown in full in the scrollable text area at the bottom 
 - 1 s sequence length
 - 0.1 s delay (blips: on 0.1 s / off 0.1 s, truncated to sequence length)
 - Preset B frequencies (19 tones)
-- default volume per frequency = ladder midpoint (−50.0 dB with the defaults)
+- no volume selected by default — every column starts untested (yellow) with `volumeDb: null` until you pick a value
 
 ## No test suite
 

@@ -3,7 +3,7 @@
 // All element ids are pinned in index.html and may not change.
 // Exposed as globals: renderChannel, attachListeners, renderCharts,
 // setStatus, copyValues, updateClipDump, saveClipJSON, localTimestamp,
-// rowDbLabel, rowDbValue, defaultMidRow.
+// rowDbLabel, rowDbValue, targetDbAt, targetShifted.
 
 // Playback ladder in dB: top row (0) = state.dbMax, each row dbStep dB
 // quieter (state.dbStep); bottom row (S-1) = dbMax - (S-1)*dbStep.
@@ -21,14 +21,24 @@ function rowDbValue(row) {
   return state.dbMax - row * state.dbStep;
 }
 
-// Row nearest the ladder midpoint (dbMax+dbMin)/2; exact for the defaults
-// (-50.0 dB at row 10 of 31). Clamped into [0, S-1].
-function defaultMidRow() {
+// The ladder row that plays exactly `db` (within 0.5 dB), or -1 if no row
+// does. Used to re-check a stored selection after a ladder change: a value
+// that no longer exists on the ladder reverts that column to untested.
+function rowForDb(db) {
   var S = state.steps;
-  if (S <= 1) return 0;
-  var mid = (state.dbMax + state.dbMin) / 2;
-  var r = Math.round((state.dbMax - mid) / state.dbStep);
-  return Math.max(0, Math.min(S - 1, r));
+  if (!S) return -1;
+  for (var r = 0; r < S; r++) {
+    if (Math.abs(rowDbValue(r) - db) <= 0.5) return r;
+  }
+  return -1;
+}
+
+// Remove the "untested" (yellow) highlight from every cell of one column.
+function clearUntested(ch, col) {
+  for (var r = 0; r < state.steps; r++) {
+    var el = document.getElementById('rad-' + ch + '-' + col + '-' + r);
+    if (el && el.parentElement) el.parentElement.classList.remove('untested');
+  }
 }
 
 // ---------- status ----------
@@ -86,13 +96,40 @@ function renderChannel(ch) {
     container.appendChild(table);
   }
 
-  // Default: select the ladder-midpoint row radio per frequency.
-  var defRow = defaultMidRow();
-  state.vols[ch] = new Array(freqs.length).fill(0);
-  for (var c3 = 0; c3 < freqs.length; c3++) {
-    state.vols[ch][c3] = rowDbValue(defRow);
-    var radio50 = document.getElementById('rad-' + ch + '-' + c3 + '-' + defRow);
-    if (radio50) radio50.checked = true;
+  // No radio is pre-selected. A column is "tested" only after the user picks a
+  // value (radio change or cell click); until then its cells are highlighted
+  // yellow (untested) and its volume is null. A tested selection is preserved
+  // across ladder re-renders: it is kept only while its stored dB still matches
+  // a ladder row exactly (within 0.5 dB); otherwise the column reverts to
+  // untested. Frequency changes reset the tested flags (resetTouched in
+  // main.js), so a new set starts untested.
+  var n = freqs.length;
+  var prevTouched = Array.isArray(state.touched[ch]) ? state.touched[ch].slice(0, n) : new Array(n).fill(false);
+  while (prevTouched.length < n) prevTouched.push(false);
+  var prevVols = Array.isArray(state.vols[ch]) ? state.vols[ch].slice(0, n) : new Array(n).fill(null);
+  while (prevVols.length < n) prevVols.push(null);
+
+  state.touched[ch] = new Array(n).fill(false);
+  state.vols[ch] = new Array(n).fill(null);
+  for (var c3 = 0; c3 < n; c3++) {
+    if (prevTouched[c3]) {
+      // Keep the selection only if its stored dB still exists on the new
+      // ladder (within 0.5 dB); otherwise the column reverts to untested.
+      var row = rowForDb(prevVols[c3]);
+      if (row >= 0) {
+        state.vols[ch][c3] = rowDbValue(row);
+        state.touched[ch][c3] = true;
+        var sel = document.getElementById('rad-' + ch + '-' + c3 + '-' + row);
+        if (sel) sel.checked = true;
+      }
+    }
+    if (!state.touched[ch][c3]) {
+      // Untested: no radio checked; yellow the column's cells.
+      for (var rr = 0; rr < S; rr++) {
+        var cellEl = document.getElementById('rad-' + ch + '-' + c3 + '-' + rr);
+        if (cellEl && cellEl.parentElement) cellEl.parentElement.classList.add('untested');
+      }
+    }
   }
 }
 
@@ -111,6 +148,8 @@ function attachListeners() {
       var chName = m[1];
       var col = Number(m[2]);
       state.vols[chName][col] = Number(t.value);
+      state.touched[chName][col] = true;
+      clearUntested(chName, col);
       setLocked(true);
       renderCharts();
       updateClipDump();
@@ -122,11 +161,15 @@ function attachListeners() {
       if (!cellRadio) return;
       var m = radioPattern.exec(cellRadio.id);
       if (!m) return;
-      // Auto-select the radio in this cell so it always reflects the
-      // (channel, frequency, row) that the cell plays.
+      // Mark this column tested and clear the "untested" highlight, then
+      // auto-select the radio so it reflects the (channel, frequency, row)
+      // the cell plays.
+      var colIdx = Number(m[2]);
+      state.touched[m[1]][colIdx] = true;
+      clearUntested(m[1], colIdx);
       if (!cellRadio.checked) {
         cellRadio.checked = true;
-        state.vols[m[1]][Number(m[2])] = Number(cellRadio.value);
+        state.vols[m[1]][colIdx] = Number(cellRadio.value);
         renderCharts();
         updateClipDump();
       }
@@ -168,7 +211,7 @@ var _chartOptions = {
 function _fitXTickFont(ch) {
   var freqs = state.freqs || [];
   if (!freqs.length) return 9;
-  var canvas = document.getElementById(ch === 'left' ? 'chartL' : 'chartR');
+  var canvas = document.getElementById(ch === 'left' ? 'chartL' : (ch === 'right' ? 'chartR' : 'chartBoth'));
   var usable = (canvas ? canvas.clientWidth : window.innerWidth) - 75;
   if (usable < 40) usable = 40;
   var slot = usable / freqs.length;
@@ -186,7 +229,7 @@ function _makeChart(canvasId, ch, vols) {
   var labels = state.freqs.slice();
   var data = (vols && vols.length === labels.length)
     ? vols.slice()
-    : new Array(labels.length).fill(0);
+    : new Array(labels.length).fill(null);
   return new Chart(document.getElementById(canvasId), {
     type: 'line',
     data: {
@@ -220,7 +263,7 @@ function drawChart(canvasId, ch) {
   if (existing) {
     existing.data.labels = state.freqs.slice();
     existing.data.datasets[0].data =
-      (vols && vols.length === state.freqs.length) ? vols.slice() : new Array(state.freqs.length).fill(0);
+      (vols && vols.length === state.freqs.length) ? vols.slice() : new Array(state.freqs.length).fill(null);
     existing.update();
     return;
   }
@@ -237,6 +280,141 @@ function drawChart(canvasId, ch) {
 function renderCharts() {
   drawChart('chartL', 'left');
   drawChart('chartR', 'right');
+  drawCombined();
+}
+
+// ---------- combined chart (left + right + target shape) ----------
+
+// Target frequency shape: a reference dB level per frequency (valley shape).
+// The BOTTOM (most negative) end is the best hearing: at 1500–3000 Hz the
+// ear is most sensitive, so it sits lowest on the chart; the 125/8000 Hz
+// ends sit highest (least negative). The absolute levels are arbitrary —
+// only the ~20 dB dip in the middle matters, because the combined chart
+// resamples this shape (log-spaced in Hz) onto the current frequency list
+// and shifts it vertically so its average matches the average of the
+// tested left/right values (no shift when nothing is tested yet).
+var TARGET_SHAPE = [
+  [125, 0], [250, -5], [500, -5], [1000, -10], [1500, -20],
+  [2000, -20], [3000, -20], [4000, -10], [6000, -5], [8000, 0]
+];
+
+// Log-frequency interpolation of the target shape at `f` Hz. Outside the
+// 125..8000 Hz span the nearest endpoint value is used (plateau).
+function targetDbAt(f) {
+  var n = TARGET_SHAPE.length;
+  if (f <= TARGET_SHAPE[0][0]) return TARGET_SHAPE[0][1];
+  if (f >= TARGET_SHAPE[n - 1][0]) return TARGET_SHAPE[n - 1][1];
+  for (var i = 0; i < n - 1; i++) {
+    var f0 = TARGET_SHAPE[i][0], f1 = TARGET_SHAPE[i + 1][0];
+    if (f >= f0 && f <= f1) {
+      var d0 = TARGET_SHAPE[i][1], d1 = TARGET_SHAPE[i + 1][1];
+      return d0 + Math.log(f / f0) / Math.log(f1 / f0) * (d1 - d0);
+    }
+  }
+  return TARGET_SHAPE[n - 1][1];
+}
+
+// Average of all tested (non-null) left and right values; null if none.
+function _avgBoth() {
+  var s = 0, n = 0;
+  ['left', 'right'].forEach(function (ch) {
+    var vols = state.vols[ch];
+    if (!vols) return;
+    for (var i = 0; i < vols.length; i++) {
+      var v = vols[i];
+      if (v !== null && isFinite(v)) { s += v; n++; }
+    }
+  });
+  return n ? s / n : null;
+}
+
+// The target shape resampled onto the current frequency list, shifted so its
+// average matches the average of the tested left/right values.
+function targetShifted() {
+  var shape = state.freqs.map(function (f) { return targetDbAt(f); });
+  var avgBoth = _avgBoth();
+  if (avgBoth === null || !shape.length) return shape;
+  var s = 0;
+  for (var i = 0; i < shape.length; i++) s += shape[i];
+  var off = avgBoth - s / shape.length;
+  return shape.map(function (v) { return v + off; });
+}
+
+var _combinedOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: true, position: 'top', labels: { font: { size: 11 } } },
+    tooltip: { display: false }
+  },
+  scales: {
+    x: {
+      title: { display: true, text: 'Frequency (Hz)', font: { size: 11 } },
+      ticks: { autoSkip: false, maxRotation: 45, font: { size: 9 } }
+    },
+    y: {
+      title: { display: true, text: 'Volume (dB)', font: { size: 11 } },
+      ticks: { font: { size: 11 } }
+    }
+  }
+};
+
+function _makeCombinedChart() {
+  return new Chart(document.getElementById('chartBoth'), {
+    type: 'line',
+    data: {
+      labels: state.freqs.slice(),
+      datasets: [
+        {
+          label: 'Left', data: [],
+          borderColor: '#3366cc', backgroundColor: 'rgba(0,0,0,0)',
+          pointStyle: 'cross', pointColor: '#3366cc', pointBackgroundColor: '#3366cc',
+          pointRadius: 4, pointHoverRadius: 4, tension: 0.5
+        },
+        {
+          label: 'Right', data: [],
+          borderColor: '#d63333', backgroundColor: 'rgba(0,0,0,0)',
+          pointStyle: 'cross', pointColor: '#d63333', pointBackgroundColor: '#d63333',
+          pointRadius: 4, pointHoverRadius: 4, tension: 0.5
+        },
+        {
+          label: 'Target', data: [],
+          borderColor: '#000', backgroundColor: 'rgba(0,0,0,0)',
+          borderDash: [5, 4], pointRadius: 0, pointHoverRadius: 0, tension: 0.5
+        }
+      ]
+    },
+    options: _combinedOptions
+  });
+}
+
+function drawCombined() {
+  var freqs = state.freqs;
+  function vals(ch) {
+    var vols = state.vols[ch];
+    return (vols && vols.length === freqs.length)
+      ? vols.slice() : new Array(freqs.length).fill(null);
+  }
+  var left = vals('left'), right = vals('right'), target = targetShifted();
+  var fs = _fitXTickFont('both');
+
+  var existing = window.__chartBoth;
+  if (existing) {
+    existing.data.labels = freqs.slice();
+    existing.data.datasets[0].data = left;
+    existing.data.datasets[1].data = right;
+    existing.data.datasets[2].data = target;
+    existing.options.scales.x.ticks.font = { size: fs, color: '#333' };
+    existing.update();
+    return;
+  }
+  var c = _makeCombinedChart();
+  c.data.datasets[0].data = left;
+  c.data.datasets[1].data = right;
+  c.data.datasets[2].data = target;
+  c.options.scales.x.ticks.font = { size: fs, color: '#333' };
+  c.update();
+  window.__chartBoth = c;
 }
 
 // ---------- clipboard (JSON) ----------
@@ -275,7 +453,7 @@ function buildClipJSON() {
     for (var i = 0; i < freqs.length; i++) {
       rows.push({
         freqHz: Number(freqs[i]),
-        volumeDb: state.vols[ch] ? state.vols[ch][i] : rowDbValue(defaultMidRow())
+        volumeDb: state.vols[ch] ? state.vols[ch][i] : null
       });
     }
     return rows;
@@ -342,6 +520,7 @@ function saveClipJSON() {
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
   a.download = 'zero-db-hero-' + data.localTimestamp.replace(/:/g, '-') + '.json';
+  a.href = url;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -359,3 +538,5 @@ window.updateClipDump = updateClipDump;
 window.saveClipJSON = saveClipJSON;
 window.rowDbLabel = rowDbLabel;
 window.localTimestamp = localTimestamp;
+window.targetDbAt = targetDbAt;
+window.targetShifted = targetShifted;

@@ -104,6 +104,9 @@ button:disabled { opacity: .5; cursor: default; }
 }
 /* Playing highlight: the cell of the currently playing tone. */
 .matrix-scroll td.cell.active { background: #f7b7b7; }
+/* Untested highlight: cells of a frequency column the user hasn't picked a
+   value for yet. Cleared once a radio is selected or the cell is clicked. */
+.matrix-scroll td.cell.untested { background: #fff3b0; }
 
 /* Footer: copy button + clipboard preview. */
 footer {

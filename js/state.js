@@ -11,5 +11,6 @@ var state = {
   dbMin: -80, // dB of the BOTTOM row (quietest / most negative)
   dbMax: -20, // dB of the TOP row (loudest / least negative)
   vols: { left: [], right: [] },
+  touched: { left: [], right: [] }, // per column: has the user picked a value yet?
   playing: null
 };
